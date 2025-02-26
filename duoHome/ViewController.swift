@@ -20,6 +20,14 @@ class ViewController: UIViewController {
     private let speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "zh_CN"))!
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
+    
+    // 添加停顿检测计时器
+    private var pauseDetectionTimer: Timer?
+    private let pauseThreshold: TimeInterval = 3.0
+    private var lastTranscription: String = ""
+    
+    // 添加AI服务
+    private let aiService = AIService(apiKey: "sk-6267c004c2ac41d69c098628660f41d0")
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -28,7 +36,13 @@ class ViewController: UIViewController {
     }
     
     private func setupUI() {
-        // ... 其他UI配置 ...
+        // 添加标题标签
+        let titleLabel = UILabel()
+        titleLabel.text = "朵朵专属AI"
+        titleLabel.font = UIFont.systemFont(ofSize: 24, weight: .bold)
+        titleLabel.textAlignment = .center
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(titleLabel)
         
         // 文本输入框
         inputTextField.placeholder = "请输入指令或点击麦克风"
@@ -50,8 +64,13 @@ class ViewController: UIViewController {
         
         // 布局约束
         NSLayoutConstraint.activate([
+            // 标题标签约束
+            titleLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            titleLabel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 30),
+            
+            // 文本输入框约束 - 调整为在标题下方
             inputTextField.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            inputTextField.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 50),
+            inputTextField.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 30),
             inputTextField.widthAnchor.constraint(equalTo: view.widthAnchor, multiplier: 0.8),
             
             voiceButton.leadingAnchor.constraint(equalTo: inputTextField.trailingAnchor, constant: 10),
@@ -125,7 +144,12 @@ class ViewController: UIViewController {
                     let text = result.bestTranscription.formattedString
                     DispatchQueue.main.async {
                         self.inputTextField.text = text
-                        self.processCommand(text)
+                        
+                        // 重置停顿计时器
+                        self.resetPauseDetectionTimer()
+                        
+                        // 保存当前转录文本
+                        self.lastTranscription = text
                     }
                 }
                 
@@ -136,6 +160,12 @@ class ViewController: UIViewController {
                     }
                     self.stopRecording()
                 } else if result?.isFinal == true {
+                    // 在语音识别完成后处理指令
+                    if let finalText = result?.bestTranscription.formattedString, !finalText.isEmpty {
+                        DispatchQueue.main.async {
+                            self.processCommand(finalText)
+                        }
+                    }
                     self.stopRecording()
                 }
             }
@@ -156,8 +186,29 @@ class ViewController: UIViewController {
         recognitionTask = nil
         voiceButton.setImage(UIImage(systemName: "mic.fill"), for: .normal)
         
+        // 取消停顿检测计时器
+        pauseDetectionTimer?.invalidate()
+        pauseDetectionTimer = nil
+        
         // 重置音频会话
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    }
+    
+    // 重置停顿检测计时器
+    private func resetPauseDetectionTimer() {
+        // 取消现有计时器
+        pauseDetectionTimer?.invalidate()
+        
+        // 创建新计时器
+        pauseDetectionTimer = Timer.scheduledTimer(withTimeInterval: pauseThreshold, repeats: false) { [weak self] _ in
+            guard let self = self, self.audioEngine.isRunning, !self.lastTranscription.isEmpty else { return }
+            
+            // 停顿超过阈值，处理当前识别的文本
+            DispatchQueue.main.async {
+                self.processCommand(self.lastTranscription)
+                self.stopRecording()
+            }
+        }
     }
     
     // 新增警告框方法
@@ -175,8 +226,34 @@ class ViewController: UIViewController {
     
     // 处理指令（文本和语音统一处理）
     private func processCommand(_ text: String) {
-        resultLabel.text = "接收指令：\(text)"
-        // 这里添加具体的指令处理逻辑
+        resultLabel.text = "接收指令：\(text)\n处理中..."
+        
+        // 使用流式输出调用AI服务
+        aiService.sendMessageStream(prompt: text, 
+            onReceive: { [weak self] partialResponse in
+                guard let self = self else { return }
+                
+                // 更新UI显示部分响应
+                DispatchQueue.main.async {
+                    if self.resultLabel.text?.hasPrefix("接收指令：\(text)\n") == true {
+                        self.resultLabel.text = "接收指令：\(text)\n\(partialResponse)"
+                    } else {
+                        self.resultLabel.text = (self.resultLabel.text ?? "") + partialResponse
+                    }
+                }
+            }, 
+            onComplete: { [weak self] fullResponse, error in
+                guard let self = self else { return }
+                
+                if let error = error {
+                    self.showAlert(message: "AI响应错误: \(error.localizedDescription)")
+                    return
+                }
+                
+                // 完成后可以执行其他操作
+                print("AI响应完成")
+            }
+        )
     }
 }
 
