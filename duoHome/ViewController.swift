@@ -280,19 +280,26 @@ class ViewController: UIViewController {
     
     // 停止录音
     private func stopRecording() {
-        audioEngine.stop()
-        audioEngine.inputNode.removeTap(onBus: 0)
-        recognitionRequest?.endAudio()
-        recognitionRequest = nil
-        recognitionTask = nil
+        if audioEngine.isRunning {
+            audioEngine.stop()
+            recognitionRequest?.endAudio()
+            audioEngine.inputNode.removeTap(onBus: 0)
+            
+            // 重置音频会话为播放模式
+            do {
+                try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
+                try AVAudioSession.sharedInstance().setActive(true)
+            } catch {
+                print("重置音频会话失败: \(error)")
+            }
+        }
+        
+        // 重置UI
         voiceButton.setImage(UIImage(systemName: "mic.fill"), for: .normal)
         
-        // 取消停顿检测计时器
+        // 取消计时器
         pauseDetectionTimer?.invalidate()
         pauseDetectionTimer = nil
-        
-        // 重置音频会话
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
     
     // 重置停顿检测计时器
@@ -333,49 +340,31 @@ class ViewController: UIViewController {
         // 添加用户消息到聊天记录
         addMessage(sender: "user", message: text)
         
-        // 添加一个空的AI回复消息（将在流式接收时更新）
-        let aiMessageIndex = addMessage(sender: "ai", message: "正在思考...")
+        // 确保音频会话设置为播放模式
+        do {
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch {
+            print("设置音频会话为播放模式失败: \(error)")
+        }
         
-        // 重置文字转语音服务的累积文本
-        TextToSpeechService.shared.resetAccumulatedText()
-        
-        // 使用流式输出调用AI服务
-        aiService.sendMessageStream(prompt: text, 
-            onReceive: { [weak self] partialResponse in
+        // 发送到AI服务并获取回复
+        aiService.sendMessageStream(
+            prompt: text,
+            onReceive: { [weak self] chunk in
                 guard let self = self else { return }
-
-                // 更新AI回复消息
-                DispatchQueue.main.async {
-
-                    // 第一次收到响应时，清除"正在思考..."
-                    if self.chatMessages[aiMessageIndex].message == "正在思考..." {
-                        self.chatMessages[aiMessageIndex].message = partialResponse
-                    } else {
-                        // 累积AI回复内容
-                        self.chatMessages[aiMessageIndex].message += partialResponse
-                    }
-                    
-                    // 朗读新增的部分响应
-                    print("3============ \(partialResponse)")
-
-                    TextToSpeechService.shared.speakAddition(partialResponse)
-                    
-                    // 更新表格中的单元格
-                    self.updateAIMessageCell(at: aiMessageIndex)
-                }
-            }, 
+                
+                // 添加或更新AI消息
+                self.addOrUpdateAIMessage(chunk)
+                
+                // 使用文本转语音服务朗读新增内容
+                TextToSpeechService.shared.speakAddition(chunk)
+            },
             onComplete: { [weak self] fullResponse, error in
                 guard let self = self else { return }
                 
                 if let error = error {
-                    DispatchQueue.main.async {
-                        self.chatMessages[aiMessageIndex].message = "回复出错: \(error.localizedDescription)"
-                        self.updateAIMessageCell(at: aiMessageIndex)
-                        self.showAlert(message: "AI响应错误: \(error.localizedDescription)")
-                        
-                        // 停止任何正在进行的朗读
-                        TextToSpeechService.shared.stopSpeaking()
-                    }
+                    self.showAlert(message: "AI响应错误: \(error.localizedDescription)")
                     return
                 }
                 
@@ -417,6 +406,25 @@ class ViewController: UIViewController {
         
         // 确保滚动到最新消息
         chatTableView.scrollToRow(at: indexPath, at: .bottom, animated: false)
+    }
+    
+    // 添加或更新AI消息
+    private func addOrUpdateAIMessage(_ chunk: String) {
+        DispatchQueue.main.async {
+            // 检查是否已经有AI消息
+            if let lastMessageIndex = self.chatMessages.indices.last,
+               self.chatMessages[lastMessageIndex].sender == "ai" {
+                // 更新现有AI消息
+                self.chatMessages[lastMessageIndex].message += chunk
+                self.updateAIMessageCell(at: lastMessageIndex)
+            } else {
+                // 添加新的AI消息
+                let index = self.addMessage(sender: "ai", message: chunk)
+                // 确保滚动到最新消息
+                let indexPath = IndexPath(row: index, section: 0)
+                self.chatTableView.scrollToRow(at: indexPath, at: .bottom, animated: true)
+            }
+        }
     }
 }
 

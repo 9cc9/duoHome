@@ -99,18 +99,26 @@ class TextToSpeechService: NSObject {
         if isSpeaking {
             stopSpeaking()
         }
-
+        
         // 重置累积文本并设置新文本
         resetAccumulatedText()
         accumulatedText = text
-
+        
         // 设置完成回调
         completionHandler = completion
-
+        
+        // 确保音频会话设置为播放模式
+        do {
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch {
+            print("设置音频会话为播放模式失败: \(error)")
+        }
+        
         // 创建语音合成请求
         let utterance = AVSpeechUtterance(string: text)
         configureUtterance(utterance)
-
+        
         // 开始朗读
         isSpeaking = true
         synthesizer.speak(utterance)
@@ -172,16 +180,24 @@ class TextToSpeechService: NSObject {
             isProcessingQueue = false
             return
         }
-
+        
         isProcessingQueue = true
-
+        
+        // 确保音频会话设置为播放模式
+        do {
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch {
+            print("设置音频会话为播放模式失败: \(error)")
+        }
+        
         // 获取队列中的下一个文本
         let nextText = textQueue.removeFirst()
-
+        
         // 创建语音合成请求
         let utterance = AVSpeechUtterance(string: nextText)
         configureUtterance(utterance)
-
+        
         // 开始朗读
         isSpeaking = true
         synthesizer.speak(utterance)
