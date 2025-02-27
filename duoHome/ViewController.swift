@@ -415,8 +415,7 @@ class ChatBubbleCell: UITableViewCell {
         contentView.backgroundColor = .clear
         
         // 头像图片视图
-        avatarImageView.contentMode = .scaleAspectFit
-        avatarImageView.layer.cornerRadius = 15
+        avatarImageView.contentMode = .scaleAspectFill
         avatarImageView.clipsToBounds = true
         avatarImageView.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(avatarImageView)
@@ -446,8 +445,8 @@ class ChatBubbleCell: UITableViewCell {
             bubbleView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -6),
             bubbleView.widthAnchor.constraint(lessThanOrEqualTo: contentView.widthAnchor, multiplier: 0.7),
             
-            avatarImageView.widthAnchor.constraint(equalToConstant: 30),
-            avatarImageView.heightAnchor.constraint(equalToConstant: 30),
+            avatarImageView.widthAnchor.constraint(equalToConstant: 36),
+            avatarImageView.heightAnchor.constraint(equalToConstant: 36),
             avatarImageView.centerYAnchor.constraint(equalTo: bubbleView.centerYAnchor)
         ])
     }
@@ -460,9 +459,16 @@ class ChatBubbleCell: UITableViewCell {
             // 确保文字颜色对比度高
             messageLabel.textColor = .white
             
-            // 用户头像
-            avatarImageView.image = UIImage(systemName: "person.circle.fill")
-            avatarImageView.tintColor = UIColor(red: 0.0, green: 0.6, blue: 0.9, alpha: 1.0)
+            // 用户头像 - 使用自定义图片
+            avatarImageView.image = UIImage(named: "UserAvatar")
+            
+            // 确保头像是圆形 - 在layoutSubviews中设置圆角
+            avatarImageView.layer.cornerRadius = 18 // 直径的一半
+            avatarImageView.clipsToBounds = true
+            
+            // 添加边框使圆形更明显（可选）
+            avatarImageView.layer.borderWidth = 1.0
+            avatarImageView.layer.borderColor = UIColor.white.cgColor
             
             // 约束调整
             NSLayoutConstraint.deactivate(bubbleView.constraints.filter { 
@@ -484,6 +490,13 @@ class ChatBubbleCell: UITableViewCell {
             avatarImageView.image = UIImage(systemName: "brain.head.profile")
             avatarImageView.tintColor = UIColor(red: 0.0, green: 0.6, blue: 0.9, alpha: 1.0)
             
+            // 确保AI头像也是圆形
+            avatarImageView.layer.cornerRadius = 18
+            avatarImageView.clipsToBounds = true
+            
+            // 添加背景色使圆形更明显（可选）
+            avatarImageView.backgroundColor = UIColor(red: 0.9, green: 0.9, blue: 0.9, alpha: 1.0)
+            
             // 约束调整
             NSLayoutConstraint.deactivate(bubbleView.constraints.filter { 
                 $0.firstAttribute == .leading || $0.firstAttribute == .trailing 
@@ -498,6 +511,14 @@ class ChatBubbleCell: UITableViewCell {
         // 强制更新布局
         setNeedsLayout()
         layoutIfNeeded()
+    }
+    
+    // 添加layoutSubviews方法确保圆角正确应用
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        
+        // 确保头像是圆形 - 在实际布局后设置圆角
+        avatarImageView.layer.cornerRadius = avatarImageView.frame.width / 2
     }
     
     func configure(with message: String, isUser: Bool) {
