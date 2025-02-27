@@ -64,6 +64,8 @@ class AIService {
     
     // 发送消息到AI并获取流式回复
     func sendMessageStream(prompt: String, onReceive: @escaping StreamHandler, onComplete: @escaping CompletionHandler) {
+        print("开始流式请求，提示词: \(prompt)")
+        
         // 创建请求体
         let requestBody: [String: Any] = [
             "model": "qwen-max", // 使用阿里云的模型
@@ -75,12 +77,13 @@ class AIService {
             "stream": true // 启用流式输出
         ]
         
-        // 创建URL会话任务
+        // 创建URL
         guard let url = URL(string: apiURL) else {
             onComplete(nil, NSError(domain: "AIService", code: 0, userInfo: [NSLocalizedDescriptionKey: "无效的URL"]))
             return
         }
         
+        // 创建请求
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -88,38 +91,93 @@ class AIService {
         
         do {
             request.httpBody = try JSONSerialization.data(withJSONObject: requestBody, options: [])
+            print("请求体已准备: \(String(data: request.httpBody!, encoding: .utf8) ?? "")")
         } catch {
+            print("请求体序列化失败: \(error)")
             onComplete(nil, error)
             return
         }
         
-        let session = URLSession.shared
-        let task = session.dataTask(with: request) { data, response, error in
+        // 创建自定义的流式处理委托
+        let streamDelegate = StreamDelegate(onReceive: onReceive, onComplete: onComplete)
+        
+        // 创建会话并设置委托
+        let session = URLSession(configuration: .default, delegate: streamDelegate, delegateQueue: .main)
+        
+        // 创建数据任务
+        let task = session.dataTask(with: request)
+        
+        // 保存任务引用到委托中，以便可以在需要时取消
+        streamDelegate.task = task
+        
+        // 开始任务
+        task.resume()
+        print("流式请求已发送")
+    }
+    
+    // 自定义URLSessionDataDelegate来处理流式数据
+    private class StreamDelegate: NSObject, URLSessionDataDelegate {
+        private let onReceive: (String) -> Void
+        private let onComplete: (String?, Error?) -> Void
+        private var fullResponse = ""
+        private var buffer = Data()
+        private var chunkCount = 0
+        
+        // 保存任务引用，以便可以在需要时取消
+        var task: URLSessionDataTask?
+        
+        init(onReceive: @escaping (String) -> Void, onComplete: @escaping (String?, Error?) -> Void) {
+            self.onReceive = onReceive
+            self.onComplete = onComplete
+            super.init()
+        }
+        
+        func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+            print("收到数据片段，大小: \(data.count) 字节")
+            buffer.append(data)
+            
+            // 尝试按行处理缓冲区
+            processBuffer()
+        }
+        
+        func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
             if let error = error {
+                print("流式请求出错: \(error)")
                 DispatchQueue.main.async {
-                    onComplete(nil, error)
+                    self.onComplete(nil, error)
                 }
                 return
             }
             
-            guard let data = data else {
-                DispatchQueue.main.async {
-                    onComplete(nil, NSError(domain: "AIService", code: 1, userInfo: [NSLocalizedDescriptionKey: "没有返回数据"]))
-                }
+            // 处理剩余的缓冲区
+            processBuffer(isComplete: true)
+            
+            let finalResponse = self.fullResponse
+            print("流式传输完成，共接收\(chunkCount)个内容块，总长度: \(finalResponse.count)")
+            DispatchQueue.main.async {
+                self.onComplete(finalResponse, nil)
+            }
+        }
+        
+        private func processBuffer(isComplete: Bool = false) {
+            // 将缓冲区转换为字符串
+            guard let bufferString = String(data: buffer, encoding: .utf8) else {
                 return
             }
             
-            // 处理流式响应
-            let responseString = String(data: data, encoding: .utf8) ?? ""
-            let lines = responseString.components(separatedBy: "\n")
+            print("处理缓冲区: \(bufferString)")
             
-            var fullResponse = ""
+            // 按行分割
+            let lines = bufferString.components(separatedBy: "\n")
             
             for line in lines {
                 if line.hasPrefix("data: ") {
                     let jsonString = line.dropFirst(6) // 移除 "data: " 前缀
+                    print("处理数据行: \(jsonString)")
+                    
                     if jsonString == "[DONE]" {
-                        break
+                        print("收到流式传输结束标记")
+                        continue
                     }
                     
                     do {
@@ -130,24 +188,33 @@ class AIService {
                            let delta = firstChoice["delta"] as? [String: Any],
                            let content = delta["content"] as? String {
                             
-                            fullResponse += content
+                            chunkCount += 1
+                            self.fullResponse += content
+                            print("解析到第\(chunkCount)个内容块: \(content)")
                             
                             DispatchQueue.main.async {
-                                onReceive(content)
+                                self.onReceive(content)
                             }
+                        } else {
+                            print("无法从JSON中提取内容，完整JSON: \(jsonString)")
                         }
                     } catch {
-                        print("解析流式数据出错: \(error)")
+                        print("解析流式数据出错: \(error)，数据: \(jsonString)")
                     }
                 }
             }
             
-            DispatchQueue.main.async {
-                onComplete(fullResponse, nil)
+            // 更新缓冲区，只保留最后一行（如果不是完成状态）
+            if !isComplete && !lines.isEmpty {
+                if let lastLine = lines.last, let lastLineData = lastLine.data(using: .utf8) {
+                    buffer = lastLineData
+                } else {
+                    buffer = Data()
+                }
+            } else {
+                buffer = Data()
             }
         }
-        
-        task.resume()
     }
     
     // 发送请求的通用方法

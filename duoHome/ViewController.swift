@@ -18,6 +18,9 @@ class ViewController: UIViewController {
     let chatTableView = UITableView()
     var chatMessages: [(sender: String, message: String)] = []
     
+    // 添加顶部背景视图作为属性
+    let topBackgroundView = UIView()
+    
     // 语音识别相关
     private let audioEngine = AVAudioEngine()
     private let speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "zh_CN"))!
@@ -32,17 +35,27 @@ class ViewController: UIViewController {
     // 添加AI服务
     private let aiService = AIService(apiKey: "sk-6267c004c2ac41d69c098628660f41d0")
 
+    // 添加文字转语音服务
+    private let textToSpeechService = TextToSpeechService.shared
+
     override func viewDidLoad() {
         super.viewDidLoad()
         setupUI()
         requestSpeechAuthorization()
+        
+        // 配置文字转语音服务
+        TextToSpeechService.shared.configure(
+            language: "zh-CN",
+            rate: AVSpeechUtteranceDefaultSpeechRate * 0.9, // 稍微慢一点的语速
+            volume: 1.0,
+            pitch: 1.0
+        )
     }
     
     private func setupUI() {
         view.backgroundColor = .systemBackground
         
-        // 添加顶部背景视图
-        let topBackgroundView = UIView()
+        // 添加顶部背景视图 - 不需要重新创建，使用类属性
         topBackgroundView.backgroundColor = UIColor(red: 0.0, green: 0.6, blue: 0.9, alpha: 1.0) // 蓝色背景
         topBackgroundView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(topBackgroundView)
@@ -315,13 +328,20 @@ class ViewController: UIViewController {
         // 添加一个空的AI回复消息（将在流式接收时更新）
         let aiMessageIndex = addMessage(sender: "ai", message: "正在思考...")
         
+        // 重置文字转语音服务的累积文本
+        TextToSpeechService.shared.resetAccumulatedText()
+        
         // 使用流式输出调用AI服务
         aiService.sendMessageStream(prompt: text, 
             onReceive: { [weak self] partialResponse in
                 guard let self = self else { return }
-                
+
+                    print("1============ \(partialResponse)")
+
                 // 更新AI回复消息
                 DispatchQueue.main.async {
+                    print("2============\(partialResponse)")
+
                     // 第一次收到响应时，清除"正在思考..."
                     if self.chatMessages[aiMessageIndex].message == "正在思考..." {
                         self.chatMessages[aiMessageIndex].message = partialResponse
@@ -330,23 +350,29 @@ class ViewController: UIViewController {
                         self.chatMessages[aiMessageIndex].message += partialResponse
                     }
                     
+                    // 朗读新增的部分响应
+                    TextToSpeechService.shared.speakAddition(partialResponse)
+                    
                     // 更新表格中的单元格
                     self.updateAIMessageCell(at: aiMessageIndex)
                 }
             }, 
             onComplete: { [weak self] fullResponse, error in
                 guard let self = self else { return }
+                print("3============ \(fullResponse)")
                 
                 if let error = error {
                     DispatchQueue.main.async {
                         self.chatMessages[aiMessageIndex].message = "回复出错: \(error.localizedDescription)"
                         self.updateAIMessageCell(at: aiMessageIndex)
                         self.showAlert(message: "AI响应错误: \(error.localizedDescription)")
+                        
+                        // 停止任何正在进行的朗读
+                        TextToSpeechService.shared.stopSpeaking()
                     }
                     return
                 }
                 
-                // 完成后可以执行其他操作
                 print("AI响应完成")
             }
         )
