@@ -27,6 +27,12 @@ class TextToSpeechService: NSObject {
     // 累积的文本，用于完整朗读
     private var accumulatedText = ""
     
+    // 待朗读的文本队列
+    private var textQueue: [String] = []
+    
+    // 是否正在处理队列
+    private var isProcessingQueue = false
+    
     // 回调闭包类型
     typealias SpeechCompletionHandler = () -> Void
     
@@ -61,6 +67,13 @@ class TextToSpeechService: NSObject {
     // 重置累积文本
     func resetAccumulatedText() {
         accumulatedText = ""
+        textQueue.removeAll()
+        isProcessingQueue = false
+        
+        // 如果正在朗读，停止当前朗读
+        if isSpeaking {
+            stopSpeaking()
+        }
     }
     
     // 朗读文本（完整文本，会停止当前朗读）
@@ -94,17 +107,73 @@ class TextToSpeechService: NSObject {
         // 添加新文本到累积文本
         accumulatedText += newText
         
-        // 如果当前没有朗读，则开始朗读完整的累积文本
-        if !isSpeaking {
-            let utterance = AVSpeechUtterance(string: accumulatedText)
-            utterance.voice = AVSpeechSynthesisVoice(language: voiceLanguage)
-            utterance.rate = speechRate
-            utterance.volume = volume
-            utterance.pitchMultiplier = pitchMultiplier
-            
-            isSpeaking = true
-            synthesizer.speak(utterance)
+        // 将新文本添加到队列
+        if !newText.isEmpty {
+            // 检查是否是完整的句子或短语
+            // 这里我们简单地按标点符号分割，可以根据需要调整
+            let sentences = splitIntoSentences(newText)
+            textQueue.append(contentsOf: sentences)
         }
+        
+        // 如果当前没有处理队列，开始处理
+        if !isProcessingQueue {
+            processTextQueue()
+        }
+    }
+    
+    // 将文本分割成句子或短语
+    private func splitIntoSentences(_ text: String) -> [String] {
+        // 如果文本很短，直接返回
+        if text.count <= 5 {
+            return [text]
+        }
+        
+        // 按标点符号分割
+        let delimiters = ["。", "！", "？", ".", "!", "?", "\n"]
+        var result: [String] = []
+        var currentSentence = ""
+        
+        for char in text {
+            currentSentence.append(char)
+            
+            // 如果遇到分隔符，添加到结果并重置当前句子
+            if delimiters.contains(String(char)) {
+                result.append(currentSentence)
+                currentSentence = ""
+            }
+        }
+        
+        // 添加最后一个句子（如果有）
+        if !currentSentence.isEmpty {
+            result.append(currentSentence)
+        }
+        
+        return result
+    }
+    
+    // 处理文本队列
+    private func processTextQueue() {
+        // 如果队列为空或者正在朗读，返回
+        if textQueue.isEmpty || isSpeaking {
+            isProcessingQueue = false
+            return
+        }
+        
+        isProcessingQueue = true
+        
+        // 获取队列中的下一个文本
+        let nextText = textQueue.removeFirst()
+        
+        // 创建语音合成请求
+        let utterance = AVSpeechUtterance(string: nextText)
+        utterance.voice = AVSpeechSynthesisVoice(language: voiceLanguage)
+        utterance.rate = speechRate
+        utterance.volume = volume
+        utterance.pitchMultiplier = pitchMultiplier
+        
+        // 开始朗读
+        isSpeaking = true
+        synthesizer.speak(utterance)
     }
     
     // 停止朗读
@@ -135,17 +204,27 @@ extension TextToSpeechService: AVSpeechSynthesizerDelegate {
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
         isSpeaking = false
         
-        // 调用完成回调
-        if let completionHandler = completionHandler {
-            DispatchQueue.main.async {
-                completionHandler()
+        // 处理队列中的下一个文本
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            
+            // 如果队列不为空，处理下一个文本
+            if !self.textQueue.isEmpty {
+                self.processTextQueue()
+            } else {
+                // 队列为空，调用完成回调
+                if let completionHandler = self.completionHandler {
+                    completionHandler()
+                    self.completionHandler = nil
+                }
+                self.isProcessingQueue = false
             }
-            self.completionHandler = nil
         }
     }
     
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
         isSpeaking = false
+        isProcessingQueue = false
         completionHandler = nil
     }
 } 

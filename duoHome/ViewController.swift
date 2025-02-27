@@ -336,11 +336,8 @@ class ViewController: UIViewController {
             onReceive: { [weak self] partialResponse in
                 guard let self = self else { return }
 
-                    print("1============ \(partialResponse)")
-
                 // 更新AI回复消息
                 DispatchQueue.main.async {
-                    print("2============\(partialResponse)")
 
                     // 第一次收到响应时，清除"正在思考..."
                     if self.chatMessages[aiMessageIndex].message == "正在思考..." {
@@ -351,6 +348,8 @@ class ViewController: UIViewController {
                     }
                     
                     // 朗读新增的部分响应
+                    print("3============ \(partialResponse)")
+
                     TextToSpeechService.shared.speakAddition(partialResponse)
                     
                     // 更新表格中的单元格
@@ -359,7 +358,6 @@ class ViewController: UIViewController {
             }, 
             onComplete: { [weak self] fullResponse, error in
                 guard let self = self else { return }
-                print("3============ \(fullResponse)")
                 
                 if let error = error {
                     DispatchQueue.main.async {
