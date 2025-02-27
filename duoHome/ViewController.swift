@@ -29,7 +29,7 @@ class ViewController: UIViewController {
     
     // 添加停顿检测计时器
     private var pauseDetectionTimer: Timer?
-    private let pauseThreshold: TimeInterval = 3.0
+    private let pauseThreshold: TimeInterval = 2.0
     private var lastTranscription: String = ""
     
     // 添加AI服务
@@ -50,13 +50,21 @@ class ViewController: UIViewController {
             volume: 1.0,
             pitch: 1.0
         )
+        
+        // 设置背景色
+        view.backgroundColor = .white
+        
+        // 顶部背景视图
+        topBackgroundView.backgroundColor = UIColor(red: 1.0, green: 0.6, blue: 0.2, alpha: 1.0) // 橘色背景
+        topBackgroundView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(topBackgroundView)
     }
     
     private func setupUI() {
         view.backgroundColor = .systemBackground
         
         // 添加顶部背景视图 - 不需要重新创建，使用类属性
-        topBackgroundView.backgroundColor = UIColor(red: 0.0, green: 0.6, blue: 0.9, alpha: 1.0) // 蓝色背景
+        topBackgroundView.backgroundColor = UIColor(red: 1.0, green: 0.6, blue: 0.2, alpha: 1.0) // 橘色背景
         topBackgroundView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(topBackgroundView)
         
@@ -114,7 +122,7 @@ class ViewController: UIViewController {
         
         // 语音按钮
         voiceButton.setImage(UIImage(systemName: "mic.fill"), for: .normal)
-        voiceButton.tintColor = UIColor(red: 0.0, green: 0.6, blue: 0.9, alpha: 1.0) // 蓝色图标
+        voiceButton.tintColor = UIColor(red: 1.0, green: 0.6, blue: 0.2, alpha: 1.0) // 橘色图标
         voiceButton.backgroundColor = .white
         voiceButton.layer.cornerRadius = 20
         voiceButton.layer.shadowColor = UIColor.black.cgColor
@@ -477,8 +485,8 @@ class ChatBubbleCell: UITableViewCell {
     
     private func setupBubbleStyle() {
         if isUserMessage {
-            // 用户消息样式 - 使用简单的背景色而不是渐变
-            bubbleView.backgroundColor = UIColor(red: 0.0, green: 0.6, blue: 0.9, alpha: 1.0)
+            // 用户消息样式 - 使用橘色背景
+            bubbleView.backgroundColor = UIColor(red: 1.0, green: 0.6, blue: 0.2, alpha: 1.0)
             
             // 确保文字颜色对比度高
             messageLabel.textColor = .white
@@ -512,14 +520,14 @@ class ChatBubbleCell: UITableViewCell {
             
             // AI头像
             avatarImageView.image = UIImage(systemName: "brain.head.profile")
-            avatarImageView.tintColor = UIColor(red: 0.0, green: 0.6, blue: 0.9, alpha: 1.0)
+            avatarImageView.tintColor = UIColor(red: 1.0, green: 0.6, blue: 0.2, alpha: 1.0) // 橘色图标
             
             // 确保AI头像也是圆形
             avatarImageView.layer.cornerRadius = 18
             avatarImageView.clipsToBounds = true
             
             // 添加背景色使圆形更明显（可选）
-            avatarImageView.backgroundColor = UIColor(red: 0.9, green: 0.9, blue: 0.9, alpha: 1.0)
+            avatarImageView.backgroundColor = UIColor(red: 0.98, green: 0.95, blue: 0.9, alpha: 1.0) // 浅橘色背景
             
             // 约束调整
             NSLayoutConstraint.deactivate(bubbleView.constraints.filter { 
