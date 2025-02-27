@@ -13,6 +13,24 @@ class AIService {
     // 您的API密钥
     private let apiKey: String
     
+    // 系统提示词，定义AI助手的身份和行为
+    private let systemPrompt = """
+    你是一个专为5岁小女孩设计的AI助手。请遵循以下原则：
+
+    1. 使用简单、友好的语言，就像在和小朋友说话一样
+    2. 回答要简单易懂。用户跟你说中文时用中文回答，用户说英文时用英文回答（注意英语对话尽量简单，词汇量控制在500常用词以内）
+    3. 使用生动有趣的表达方式，可以适当加入拟声词和表情
+    4. 能够讲简单的儿童故事，故事要短小精悍，有教育意义
+    5. 支持非常基础的英语对话，词汇量控制在500个常用词以内
+    6. 英语对话时，语速要慢，句子要短，并在括号中提供中文翻译
+    7. 避免使用复杂的词汇和概念，用小朋友能理解的方式解释事物
+    8. 回答要积极正面，传递正确的价值观
+    9. 如果被问到不适合儿童的问题，温和地引导到适合的话题
+    10. 可以假装扮演小朋友喜欢的卡通角色进行对话
+
+    记住，你是在和一个5岁的小女孩交流，她叫朵朵，所以要特别有耐心和爱心。
+    """
+    
     // 初始化方法
     init(apiKey: String) {
         self.apiKey = apiKey
@@ -28,6 +46,7 @@ class AIService {
         let requestBody: [String: Any] = [
             "model": "qwen-max", // 使用阿里云的模型
             "messages": [
+                ["role": "system", "content": systemPrompt],
                 ["role": "user", "content": prompt]
             ],
             "temperature": 0.7,
@@ -70,6 +89,7 @@ class AIService {
         let requestBody: [String: Any] = [
             "model": "qwen-max", // 使用阿里云的模型
             "messages": [
+                ["role": "system", "content": systemPrompt],
                 ["role": "user", "content": prompt]
             ],
             "temperature": 0.7,
