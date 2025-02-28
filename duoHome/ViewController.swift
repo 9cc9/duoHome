@@ -55,7 +55,7 @@ class ViewController: UIViewController {
         view.backgroundColor = .white
         
         // 顶部背景视图
-        topBackgroundView.backgroundColor = UIColor(red: 1.0, green: 0.6, blue: 0.2, alpha: 1.0) // 橘色背景
+        topBackgroundView.backgroundColor = UIColor(red: 1.0, green: 0.7, blue: 0.8, alpha: 1.0) // 浅粉色背景
         topBackgroundView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(topBackgroundView)
     }
@@ -64,7 +64,7 @@ class ViewController: UIViewController {
         view.backgroundColor = .systemBackground
         
         // 添加顶部背景视图 - 不需要重新创建，使用类属性
-        topBackgroundView.backgroundColor = UIColor(red: 1.0, green: 0.6, blue: 0.2, alpha: 1.0) // 橘色背景
+        topBackgroundView.backgroundColor = UIColor(red: 1.0, green: 0.7, blue: 0.8, alpha: 1.0) // 浅粉色背景
         topBackgroundView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(topBackgroundView)
         
@@ -100,7 +100,7 @@ class ViewController: UIViewController {
         
         // 底部输入区域容器
         let inputContainerView = UIView()
-        inputContainerView.backgroundColor = .systemGray6
+        inputContainerView.backgroundColor = .white // 修改为白色背景
         // 添加阴影效果
         inputContainerView.layer.shadowColor = UIColor.black.cgColor
         inputContainerView.layer.shadowOffset = CGSize(width: 0, height: -2)
@@ -109,8 +109,21 @@ class ViewController: UIViewController {
         inputContainerView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(inputContainerView)
         
-        // 文本输入框
-        inputTextField.placeholder = "请输入指令或点击麦克风"
+        // 语音按钮 - 调大并放在上方居中
+        voiceButton.setImage(UIImage(systemName: "mic.fill", withConfiguration: UIImage.SymbolConfiguration(pointSize: 30, weight: .medium)), for: .normal)
+        voiceButton.tintColor = .white // 白色图标
+        voiceButton.backgroundColor = UIColor(red: 1.0, green: 0.7, blue: 0.8, alpha: 1.0) // 浅粉色背景
+        voiceButton.layer.cornerRadius = 35 // 增大圆角
+        voiceButton.layer.shadowColor = UIColor.black.cgColor
+        voiceButton.layer.shadowOffset = CGSize(width: 0, height: 2)
+        voiceButton.layer.shadowOpacity = 0.3
+        voiceButton.layer.shadowRadius = 4
+        voiceButton.addTarget(self, action: #selector(voiceButtonTapped), for: .touchUpInside)
+        voiceButton.translatesAutoresizingMaskIntoConstraints = false
+        inputContainerView.addSubview(voiceButton)
+        
+        // 文本输入框 - 放在语音按钮下方
+        inputTextField.placeholder = "请输入指令或点击上方麦克风"
         inputTextField.font = UIFont.systemFont(ofSize: 16)
         inputTextField.borderStyle = .roundedRect
         inputTextField.backgroundColor = .white
@@ -119,19 +132,6 @@ class ViewController: UIViewController {
         inputTextField.delegate = self
         inputTextField.translatesAutoresizingMaskIntoConstraints = false
         inputContainerView.addSubview(inputTextField)
-        
-        // 语音按钮
-        voiceButton.setImage(UIImage(systemName: "mic.fill"), for: .normal)
-        voiceButton.tintColor = UIColor(red: 1.0, green: 0.6, blue: 0.2, alpha: 1.0) // 橘色图标
-        voiceButton.backgroundColor = .white
-        voiceButton.layer.cornerRadius = 20
-        voiceButton.layer.shadowColor = UIColor.black.cgColor
-        voiceButton.layer.shadowOffset = CGSize(width: 0, height: 1)
-        voiceButton.layer.shadowOpacity = 0.2
-        voiceButton.layer.shadowRadius = 2
-        voiceButton.addTarget(self, action: #selector(voiceButtonTapped), for: .touchUpInside)
-        voiceButton.translatesAutoresizingMaskIntoConstraints = false
-        inputContainerView.addSubview(voiceButton)
         
         // 布局约束
         NSLayoutConstraint.activate([
@@ -155,19 +155,19 @@ class ViewController: UIViewController {
             inputContainerView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             inputContainerView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             inputContainerView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
-            inputContainerView.heightAnchor.constraint(equalToConstant: 70),
+            inputContainerView.heightAnchor.constraint(equalToConstant: 120), // 增加高度
             
-            // 输入框约束
+            // 语音按钮约束 - 放在上方居中
+            voiceButton.centerXAnchor.constraint(equalTo: inputContainerView.centerXAnchor),
+            voiceButton.topAnchor.constraint(equalTo: inputContainerView.topAnchor, constant: 12),
+            voiceButton.widthAnchor.constraint(equalToConstant: 60), // 增大按钮尺寸
+            voiceButton.heightAnchor.constraint(equalToConstant: 60), // 增大按钮尺寸
+            
+            // 输入框约束 - 放在下方
             inputTextField.leadingAnchor.constraint(equalTo: inputContainerView.leadingAnchor, constant: 16),
-            inputTextField.centerYAnchor.constraint(equalTo: inputContainerView.centerYAnchor),
-            inputTextField.trailingAnchor.constraint(equalTo: voiceButton.leadingAnchor, constant: -12),
+            inputTextField.trailingAnchor.constraint(equalTo: inputContainerView.trailingAnchor, constant: -16),
+            inputTextField.topAnchor.constraint(equalTo: voiceButton.bottomAnchor, constant: 12),
             inputTextField.heightAnchor.constraint(equalToConstant: 36),
-            
-            // 语音按钮约束
-            voiceButton.trailingAnchor.constraint(equalTo: inputContainerView.trailingAnchor, constant: -16),
-            voiceButton.centerYAnchor.constraint(equalTo: inputContainerView.centerYAnchor),
-            voiceButton.widthAnchor.constraint(equalToConstant: 40),
-            voiceButton.heightAnchor.constraint(equalToConstant: 40),
             
             // 聊天记录表格约束
             chatTableView.topAnchor.constraint(equalTo: topBackgroundView.bottomAnchor),
@@ -493,8 +493,8 @@ class ChatBubbleCell: UITableViewCell {
     
     private func setupBubbleStyle() {
         if isUserMessage {
-            // 用户消息样式 - 使用橘色背景
-            bubbleView.backgroundColor = UIColor(red: 1.0, green: 0.6, blue: 0.2, alpha: 1.0)
+            // 用户消息样式 - 使用浅粉色背景
+            bubbleView.backgroundColor = UIColor(red: 1.0, green: 0.7, blue: 0.8, alpha: 1.0) // 浅粉色背景
             
             // 确保文字颜色对比度高
             messageLabel.textColor = .white
@@ -528,7 +528,7 @@ class ChatBubbleCell: UITableViewCell {
             
             // AI头像
             avatarImageView.image = UIImage(systemName: "brain.head.profile")
-            avatarImageView.tintColor = UIColor(red: 1.0, green: 0.6, blue: 0.2, alpha: 1.0) // 橘色图标
+            avatarImageView.tintColor = UIColor(red: 1.0, green: 0.7, blue: 0.8, alpha: 1.0) // 浅粉色图标
             
             // 确保AI头像也是圆形
             avatarImageView.layer.cornerRadius = 18
