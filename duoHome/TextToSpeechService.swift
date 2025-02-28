@@ -24,6 +24,9 @@ class TextToSpeechService: NSObject {
     private var volume: Float = 1.0
     private var pitchMultiplier: Float = 1.0
     
+    // 添加声音标识符变量
+    private var voiceIdentifier: String? = nil
+    
     // 累积的文本，用于完整朗读
     private var accumulatedText = ""
     
@@ -43,10 +46,38 @@ class TextToSpeechService: NSObject {
     private override init() {
         super.init()
         synthesizer.delegate = self
+        setupPreferredVoice() // 添加设置首选声音的方法调用
     }
-
+    
+    // 设置首选声音
+    private func setupPreferredVoice() {
+        // 获取所有可用的声音
+        let voices = AVSpeechSynthesisVoice.speechVoices()
+        
+        // 尝试找到最适合的中文女声
+        for voice in voices {
+            // 优先选择 Siri 的声音，因为它通常质量更好
+            if voice.language.starts(with: "zh-") && voice.name.contains("Siri") {
+                voiceIdentifier = voice.identifier
+                return
+            }
+        }
+        
+        // 如果没有找到 Siri 声音，尝试找其他中文女声
+        for voice in voices {
+            if voice.language.starts(with: "zh-") && 
+               (voice.name.contains("Tingting") || voice.name.contains("Female")) {
+                voiceIdentifier = voice.identifier
+                return
+            }
+        }
+        
+        // 如果没有找到合适的声音，使用默认的中文声音
+        voiceLanguage = "zh-CN"
+    }
+    
     // 配置语音参数
-    func configure(language: String? = nil, rate: Float? = nil, volume: Float? = nil, pitch: Float? = nil) {
+    func configure(language: String? = nil, rate: Float? = nil, volume: Float? = nil, pitch: Float? = nil, voiceId: String? = nil) {
         if let language = language {
             voiceLanguage = language
         }
@@ -62,6 +93,15 @@ class TextToSpeechService: NSObject {
         if let pitch = pitch {
             pitchMultiplier = pitch
         }
+        
+        if let voiceId = voiceId {
+            voiceIdentifier = voiceId
+        }
+    }
+    
+    // 获取所有可用的声音
+    func getAvailableVoices() -> [AVSpeechSynthesisVoice] {
+        return AVSpeechSynthesisVoice.speechVoices()
     }
 
     // 重置累积文本
@@ -78,19 +118,60 @@ class TextToSpeechService: NSObject {
 
     // 配置语音合成请求
     private func configureUtterance(_ utterance: AVSpeechUtterance) {
-        utterance.voice = AVSpeechSynthesisVoice(language: voiceLanguage)
+        // 设置声音
+        if let voiceIdentifier = voiceIdentifier {
+            utterance.voice = AVSpeechSynthesisVoice(identifier: voiceIdentifier)
+        } else {
+            utterance.voice = AVSpeechSynthesisVoice(language: voiceLanguage)
+        }
+        
         utterance.rate = speechRate
         utterance.volume = volume
         utterance.pitchMultiplier = pitchMultiplier
-
+        
         // 设置不朗读标点符号
-        // 注意：这个属性在iOS 14及以上版本可用
         if #available(iOS 14.0, *) {
-            // 0.0表示不朗读标点符号，1.0表示完全朗读标点符号
             utterance.prefersAssistiveTechnologySettings = false
             utterance.postUtteranceDelay = 0.0
             utterance.preUtteranceDelay = 0.0
         }
+    }
+
+    // 替换标点符号为适当的停顿标记
+    private func replacePunctuationWithPauses(_ text: String) -> String {
+        var result = text
+        
+        // 1. 替换句子结束标点为句号（保留停顿但不读出标点名称）
+        let sentenceEndingPunctuation = ["！", "!", "？", "?", "；", ";", "…", "......"]
+        for punct in sentenceEndingPunctuation {
+            result = result.replacingOccurrences(of: punct, with: "。")
+        }
+        
+        // 2. 替换引号和括号（这些通常会被读出）
+        let quotesAndBrackets = ["「", "」", "『", "』", "（", "）", "(", ")", "《", "》", "〈", "〉", "\\\"", "'"]
+        for bracket in quotesAndBrackets {
+            result = result.replacingOccurrences(of: bracket, with: "")
+        }
+        
+        // 3. 替换逗号和顿号为短停顿
+        result = result.replacingOccurrences(of: "，", with: ", ")
+        result = result.replacingOccurrences(of: "、", with: ", ")
+        
+        // 4. 替换冒号和破折号
+        result = result.replacingOccurrences(of: "：", with: ": ")
+        result = result.replacingOccurrences(of: "—", with: ", ")
+        result = result.replacingOccurrences(of: "——", with: ", ")
+        
+        // 5. 处理英文标点（确保它们前后有空格）
+        result = result.replacingOccurrences(of: ",", with: ", ")
+        result = result.replacingOccurrences(of: ":", with: ": ")
+        
+        // 6. 移除多余的空格
+        while result.contains("  ") {
+            result = result.replacingOccurrences(of: "  ", with: " ")
+        }
+        
+        return result
     }
 
     // 朗读文本（完整文本，会停止当前朗读）
@@ -115,8 +196,11 @@ class TextToSpeechService: NSObject {
             print("设置音频会话为播放模式失败: \(error)")
         }
         
+        // 处理文本，替换标点符号为适当的停顿标记
+        let processedText = replacePunctuationWithPauses(text)
+        
         // 创建语音合成请求
-        let utterance = AVSpeechUtterance(string: text)
+        let utterance = AVSpeechUtterance(string: processedText)
         configureUtterance(utterance)
         
         // 开始朗读
@@ -194,8 +278,11 @@ class TextToSpeechService: NSObject {
         // 获取队列中的下一个文本
         let nextText = textQueue.removeFirst()
         
+        // 处理文本，替换标点符号为适当的停顿标记
+        let processedText = replacePunctuationWithPauses(nextText)
+        
         // 创建语音合成请求
-        let utterance = AVSpeechUtterance(string: nextText)
+        let utterance = AVSpeechUtterance(string: processedText)
         configureUtterance(utterance)
         
         // 开始朗读
