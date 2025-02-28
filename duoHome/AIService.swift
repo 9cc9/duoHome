@@ -31,6 +31,11 @@ class AIService {
     记住，你是在和一个5岁的小女孩交流，她叫朵朵，所以要特别有耐心和爱心。
     """
     
+    // 存储对话历史
+    private var chatHistory: [(role: String, content: String)] = []
+    // 最大历史消息数量
+    private let maxHistoryMessages = 10
+    
     // 初始化方法
     init(apiKey: String) {
         self.apiKey = apiKey
@@ -40,15 +45,28 @@ class AIService {
     typealias CompletionHandler = (String?, Error?) -> Void
     typealias StreamHandler = (String) -> Void
     
+    // 清除对话历史
+    func clearChatHistory() {
+        chatHistory.removeAll()
+    }
+    
     // 发送消息到AI并获取回复（非流式）
     func sendMessage(prompt: String, completion: @escaping CompletionHandler) {
+        // 添加用户消息到历史记录
+        addMessageToHistory(role: "user", content: prompt)
+        
+        // 创建消息数组，包含系统提示和历史记录
+        var messages: [[String: String]] = [
+            ["role": "system", "content": systemPrompt]
+        ]
+        
+        // 添加历史对话记录
+        messages.append(contentsOf: chatHistory.map { ["role": $0.role, "content": $0.content] })
+        
         // 创建请求体
         let requestBody: [String: Any] = [
             "model": "qwen-max", // 使用阿里云的模型
-            "messages": [
-                ["role": "system", "content": systemPrompt],
-                ["role": "user", "content": prompt]
-            ],
+            "messages": messages,
             "temperature": 0.7,
             "max_tokens": 800
         ]
@@ -71,6 +89,8 @@ class AIService {
                    let firstChoice = choices.first,
                    let message = firstChoice["message"] as? [String: Any],
                    let content = message["content"] as? String {
+                    // 添加AI回复到历史记录
+                    self.addMessageToHistory(role: "assistant", content: content)
                     completion(content, nil)
                 } else {
                     completion(nil, NSError(domain: "AIService", code: 2, userInfo: [NSLocalizedDescriptionKey: "解析响应失败"]))
@@ -85,13 +105,21 @@ class AIService {
     func sendMessageStream(prompt: String, onReceive: @escaping StreamHandler, onComplete: @escaping CompletionHandler) {
         print("开始流式请求，提示词: \(prompt)")
         
+        // 添加用户消息到历史记录
+        addMessageToHistory(role: "user", content: prompt)
+        
+        // 创建消息数组，包含系统提示和历史记录
+        var messages: [[String: String]] = [
+            ["role": "system", "content": systemPrompt]
+        ]
+        
+        // 添加历史对话记录
+        messages.append(contentsOf: chatHistory.map { ["role": $0.role, "content": $0.content] })
+        
         // 创建请求体
         let requestBody: [String: Any] = [
             "model": "qwen-max", // 使用阿里云的模型
-            "messages": [
-                ["role": "system", "content": systemPrompt],
-                ["role": "user", "content": prompt]
-            ],
+            "messages": messages,
             "temperature": 0.7,
             "max_tokens": 800,
             "stream": true // 启用流式输出
@@ -119,7 +147,13 @@ class AIService {
         }
         
         // 创建自定义的流式处理委托
-        let streamDelegate = StreamDelegate(onReceive: onReceive, onComplete: onComplete)
+        let streamDelegate = StreamDelegate(onReceive: onReceive, onComplete: { content, error in
+            // 如果成功接收到完整回复，添加到历史记录
+            if let content = content, error == nil {
+                self.addMessageToHistory(role: "assistant", content: content)
+            }
+            onComplete(content, error)
+        })
         
         // 创建会话并设置委托
         let session = URLSession(configuration: .default, delegate: streamDelegate, delegateQueue: .main)
@@ -133,6 +167,19 @@ class AIService {
         // 开始任务
         task.resume()
         print("流式请求已发送")
+    }
+    
+    // 添加消息到历史记录
+    private func addMessageToHistory(role: String, content: String) {
+        chatHistory.append((role: role, content: content))
+        
+        // 如果历史记录超过最大数量，移除最早的非系统消息
+        if chatHistory.count > maxHistoryMessages {
+            // 找到第一个非系统消息的索引
+            if let index = chatHistory.firstIndex(where: { $0.role != "system" }) {
+                chatHistory.remove(at: index)
+            }
+        }
     }
     
     // 自定义URLSessionDataDelegate来处理流式数据
