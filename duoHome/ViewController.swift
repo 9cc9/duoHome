@@ -38,6 +38,9 @@ class ViewController: UIViewController {
     // 添加文字转语音服务
     private let textToSpeechService = TextToSpeechService.shared
 
+    // 添加应用唤起服务
+    private let appLaunchService = AppLaunchService.shared
+
     override func viewDidLoad() {
         super.viewDidLoad()
         setupUI()
@@ -340,6 +343,17 @@ class ViewController: UIViewController {
         // 添加用户消息到聊天记录
         addMessage(sender: "user", message: text)
         
+        // 检查是否需要唤起应用
+        if let appLaunchResult = appLaunchService.checkAndLaunchApp(for: text) {
+            // 如果成功识别并尝试启动应用
+            addOrUpdateAIMessage(appLaunchResult.responseMessage)
+            
+            // 如果成功启动应用，不需要继续发送到AI服务
+            if appLaunchResult.appLaunched {
+                return
+            }
+        }
+        
         // 确保音频会话设置为播放模式
         do {
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
@@ -608,4 +622,3 @@ extension ViewController: UITextFieldDelegate {
         return false
     }
 }
-

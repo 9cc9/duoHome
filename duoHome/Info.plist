@@ -6,6 +6,12 @@
 	<string>需要麦克风权限来进行语音输入</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>需要语音识别权限来理解您的指令</string>
+    <key>LSApplicationQueriesSchemes</key>
+    <array>
+        <string>qqmusic</string>
+        <string>iting</string>
+        <string>orpheuswidget</string>
+    </array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
