@@ -113,7 +113,8 @@ class ViewController: UIViewController {
         view.addSubview(inputContainerView)
         
         // 语音按钮 - 调大并放在上方居中
-        voiceButton.setImage(UIImage(systemName: "mic.fill", withConfiguration: UIImage.SymbolConfiguration(pointSize: 30, weight: .medium)), for: .normal)
+        let micConfig = UIImage.SymbolConfiguration(pointSize: 30, weight: .medium)
+        voiceButton.setImage(UIImage(systemName: "mic.fill", withConfiguration: micConfig), for: .normal)
         voiceButton.tintColor = .white // 白色图标
         voiceButton.backgroundColor = UIColor(red: 1.0, green: 0.7, blue: 0.8, alpha: 1.0) // 浅粉色背景
         voiceButton.layer.cornerRadius = 35 // 增大圆角
@@ -275,7 +276,8 @@ class ViewController: UIViewController {
             }
             
             try audioEngine.start()
-            voiceButton.setImage(UIImage(systemName: "mic.slash.fill"), for: .normal)
+            let micConfig = UIImage.SymbolConfiguration(pointSize: 30, weight: .medium)
+            voiceButton.setImage(UIImage(systemName: "mic.slash.fill", withConfiguration: micConfig), for: .normal)
         } catch {
             showAlert(message: "录音启动失败：\(error.localizedDescription)")
         }
@@ -298,7 +300,8 @@ class ViewController: UIViewController {
         }
         
         // 重置UI
-        voiceButton.setImage(UIImage(systemName: "mic.fill"), for: .normal)
+        let micConfig = UIImage.SymbolConfiguration(pointSize: 30, weight: .medium)
+        voiceButton.setImage(UIImage(systemName: "mic.fill", withConfiguration: micConfig), for: .normal)
         
         // 取消计时器
         pauseDetectionTimer?.invalidate()
