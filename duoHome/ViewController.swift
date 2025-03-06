@@ -41,6 +41,9 @@ class ViewController: UIViewController {
     // 添加应用唤起服务
     private let appLaunchService = AppLaunchService.shared
 
+    // 添加星星管理服务
+    private let starService = StarManagementService.shared
+
     override func viewDidLoad() {
         super.viewDidLoad()
         setupUI()
@@ -338,13 +341,88 @@ class ViewController: UIViewController {
         }
     }
     
-    // 处理指令（文本和语音统一处理）
+    private func processStarCommand(_ text: String) -> Bool {
+        // 增加星星命令 - 固定增加1颗
+        if text.contains("星星") && (text.contains("加") || text.contains("增加")) {
+            do {
+                print("⭐️ 增加星星操作 - 数量: 1")
+                try starService.addStars(1)
+                addOrUpdateAIMessage("已经帮你增加了1颗星星！")
+                print("✅ 星星增加成功 - 当前总数: \(starService.getStars())")
+                return true
+            } catch {
+                print("❌ 增加星星失败: \(error)")
+                addOrUpdateAIMessage("抱歉，增加星星时出现错误")
+                return true
+            }
+        }
+        
+        // 减少星星命令 - 固定减少1颗
+        if text.contains("星星") && (text.contains("减") || text.contains("扣除")) {
+            do {
+                print("⭐️ 减少星星操作 - 数量: 1")
+                try starService.removeStars(1)
+                addOrUpdateAIMessage("已经减少了1颗星星。")
+                print("✅ 星星减少成功 - 当前总数: \(starService.getStars())")
+                return true
+            } catch {
+                print("❌ 减少星星失败: \(error)")
+                addOrUpdateAIMessage("抱歉，减少星星时出现错误")
+                return true
+            }
+        }
+        
+        // 查询星星数量
+        if text.contains("星星") && (text.contains("查看") || text.contains("多少")) {
+            print("📊 查询星星数量")
+            let todayStars = starService.getStars()
+            let weeklyReport = starService.getWeeklyReport()
+            let totalStars = weeklyReport.reduce(0) { $0 + $1.stars }
+            
+            // 创建星星表格
+            var message = "本周星星统计表 ⭐️\n"
+            message += "┌──────┬──────┐\n"
+            message += "│ 日期 │ 星星 │\n"
+            message += "├──────┼──────┤\n"
+            
+            // 星期几的中文表示
+            let weekdays = ["一", "二", "三", "四", "五", "六", "日"]
+            
+            // 添加每天的数据
+            for day in weeklyReport {
+                let calendar = Calendar.current
+                // 获取星期几（1代表周日，2代表周一，依此类推）
+                let weekdayNum = calendar.component(.weekday, from: day.date)
+                // 转换为中国习惯的星期几（0代表周日，1代表周一）
+                let adjustedWeekday = (weekdayNum + 5) % 7
+                let weekday = "周" + weekdays[adjustedWeekday]
+                
+                let stars = String(day.stars)
+                message += "│ \(weekday)   │  \(stars)   │\n"
+            }
+            
+            message += "└──────┴──────┘\n"
+            message += "\n总计：\(totalStars)颗星星 ✨"
+            
+            print("📈 查询结果 - 今日星星: \(todayStars), 本周总数: \(totalStars)")
+            addOrUpdateAIMessage(message)
+            return true
+        }
+        
+        return false
+    }
+    
     private func processCommand(_ text: String) {
         // 清空输入框
         inputTextField.text = ""
         
         // 添加用户消息到聊天记录
         addMessage(sender: "user", message: text)
+        
+        // 先处理星星相关的命令
+        if processStarCommand(text) {
+            return
+        }
         
         // 检查是否需要唤起应用
         if let appLaunchResult = appLaunchService.checkAndLaunchApp(for: text) {

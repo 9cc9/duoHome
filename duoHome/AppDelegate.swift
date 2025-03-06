@@ -15,6 +15,10 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         // Override point for customization after application launch.
+        setupWeeklyReset()
+
+        // 预加载 Core Data 堆栈
+        _ = StarManagementService.shared
         return true
     }
 
@@ -75,6 +79,27 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
                 fatalError("Unresolved error \(nserror), \(nserror.userInfo)")
             }
         }
+    }
+
+    private func setupWeeklyReset() {
+        // 设置每周一凌晨0点重置星星
+        let calendar = Calendar.current
+        var components = DateComponents()
+        components.weekday = 2 // 周一
+        components.hour = 0
+        components.minute = 0
+        
+        let timer = Timer(fireAt: calendar.nextDate(after: Date(), matching: components, matchingPolicy: .nextTime)!,
+                         interval: 7 * 24 * 60 * 60, // 一周的秒数
+                         target: self,
+                         selector: #selector(resetWeeklyStars),
+                         userInfo: nil,
+                         repeats: true)
+        RunLoop.main.add(timer, forMode: .common)
+    }
+    
+    @objc private func resetWeeklyStars() {
+        StarManagementService.shared.resetWeeklyStars()
     }
 
 }
