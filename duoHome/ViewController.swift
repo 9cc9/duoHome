@@ -35,6 +35,8 @@ class ViewController: UIViewController {
     // 添加AI服务
     private let aiService = AIService(apiKey: "sk-6267c004c2ac41d69c098628660f41d0")
 
+    private let localAI = LocalAIService(modelName: "deepseek-r1:32b")
+
     // 添加文字转语音服务
     private let textToSpeechService = TextToSpeechService.shared
 
@@ -444,26 +446,40 @@ class ViewController: UIViewController {
         }
         
         // 发送到AI服务并获取回复
-        aiService.sendMessageStream(
+        print("🚀 开始发送消息到本地AI服务...")
+        localAI.sendMessageStream(
             prompt: text,
             onReceive: { [weak self] chunk in
                 guard let self = self else { return }
                 
+                print("📥 收到AI响应片段: \(chunk)")
+                
                 // 添加或更新AI消息
                 self.addOrUpdateAIMessage(chunk)
                 
-                // 使用文本转语音服务朗读新增内容
+                // 使用文字转语音服务朗读新增内容
                 TextToSpeechService.shared.speakAddition(chunk)
             },
             onComplete: { [weak self] fullResponse, error in
                 guard let self = self else { return }
                 
                 if let error = error {
-                    self.showAlert(message: "AI响应错误: \(error.localizedDescription)")
+                    print("❌ AI服务连接错误: \(error.localizedDescription)")
+                    print("❌ 错误详情: \(error)")
+                    
+                    // 向用户显示更友好的错误信息
+                    let errorMessage = "无法连接到AI服务，请检查：\n1. AI服务是否已启动\n2. 端口11434是否正确\n3. 本地网络连接是否正常"
+                    self.showAlert(message: errorMessage)
+                    
+                    // 在聊天界面显示错误信息
+                    self.addOrUpdateAIMessage("抱歉，我现在无法回应，请检查AI服务是否正常运行。")
                     return
                 }
                 
-                print("AI响应完成")
+                print("✅ AI响应完成")
+                if let response = fullResponse {
+                    print("📝 完整响应内容: \(response)")
+                }
             }
         )
     }
@@ -483,9 +499,7 @@ class ViewController: UIViewController {
         
         // 先更新数据源中的消息
         let currentMessage = chatMessages[index].message
-        
-        // 打印调试信息
-        print("更新AI消息: \(currentMessage)")
+    
         
         // 更新表格视图
         chatTableView.beginUpdates()
