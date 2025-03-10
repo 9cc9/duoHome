@@ -50,56 +50,7 @@ class AIService {
         chatHistory.removeAll()
     }
     
-    // 发送消息到AI并获取回复（非流式）
-    func sendMessage(prompt: String, completion: @escaping CompletionHandler) {
-        // 添加用户消息到历史记录
-        addMessageToHistory(role: "user", content: prompt)
-        
-        // 创建消息数组，包含系统提示和历史记录
-        var messages: [[String: String]] = [
-            ["role": "system", "content": systemPrompt]
-        ]
-        
-        // 添加历史对话记录
-        messages.append(contentsOf: chatHistory.map { ["role": $0.role, "content": $0.content] })
-        
-        // 创建请求体
-        let requestBody: [String: Any] = [
-            "model": "qwen-max", // 使用阿里云的模型
-            "messages": messages,
-            "temperature": 0.7,
-            "max_tokens": 800
-        ]
-        
-        // 发送请求
-        sendRequest(requestBody: requestBody, isStreaming: false) { data, error in
-            if let error = error {
-                completion(nil, error)
-                return
-            }
-            
-            guard let data = data else {
-                completion(nil, NSError(domain: "AIService", code: 1, userInfo: [NSLocalizedDescriptionKey: "没有返回数据"]))
-                return
-            }
-            
-            do {
-                if let json = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any],
-                   let choices = json["choices"] as? [[String: Any]],
-                   let firstChoice = choices.first,
-                   let message = firstChoice["message"] as? [String: Any],
-                   let content = message["content"] as? String {
-                    // 添加AI回复到历史记录
-                    self.addMessageToHistory(role: "assistant", content: content)
-                    completion(content, nil)
-                } else {
-                    completion(nil, NSError(domain: "AIService", code: 2, userInfo: [NSLocalizedDescriptionKey: "解析响应失败"]))
-                }
-            } catch {
-                completion(nil, error)
-            }
-        }
-    }
+
     
     // 发送消息到AI并获取流式回复
     func sendMessageStream(prompt: String, onReceive: @escaping StreamHandler, onComplete: @escaping CompletionHandler) {
