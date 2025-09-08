@@ -10,19 +10,10 @@ import AVFoundation
 import Speech
 
 class ViewController: UIViewController {
-    // 输入相关组件
-    let inputTextField = UITextField()
-    let voiceButton = UIButton()
-    
-    // 聊天记录显示区域
-    let chatTableView = UITableView()
-    var chatMessages: [(sender: String, message: String)] = []
-    
-    // 添加顶部背景视图作为属性
-    let topBackgroundView = UIView()
-    
-    // 添加底部输入区域容器作为属性
-    let inputContainerView = UIView()
+    // UI组件
+    private let topHeaderView = TopHeaderView()
+    private let chatTableView = ChatTableView()
+    private let inputAreaView = InputAreaView()
     
     // 语音识别相关
     private let audioEngine = AVAudioEngine()
@@ -37,23 +28,23 @@ class ViewController: UIViewController {
     
     // 添加AI服务
     private let aiService = AIService(apiKey: "sk-6267c004c2ac41d69c098628660f41d0")
-
     private let localAI = LocalAIService(modelName: "deepseek-r1:32b")
-
+    
     // 添加文字转语音服务
     private let textToSpeechService = TextToSpeechService.shared
-
+    
     // 添加应用唤起服务
     private let appLaunchService = AppLaunchService.shared
-
+    
     // 添加星星管理服务
     private let starService = StarManagementService.shared
 
     override func viewDidLoad() {
         super.viewDidLoad()
         setupUI()
-        requestSpeechAuthorization()
+        setupDelegates()
         setupKeyboardObservers()
+        requestSpeechAuthorization()
         
         // 配置文字转语音服务
         TextToSpeechService.shared.configure(
@@ -65,15 +56,46 @@ class ViewController: UIViewController {
         
         // 设置背景色
         view.backgroundColor = .white
-        
-        // 顶部背景视图
-        topBackgroundView.backgroundColor = UIColor(red: 1.0, green: 0.7, blue: 0.8, alpha: 1.0) // 浅粉色背景
-        topBackgroundView.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(topBackgroundView)
     }
     
     deinit {
         NotificationCenter.default.removeObserver(self)
+    }
+    
+    private func setupUI() {
+        view.backgroundColor = .systemBackground
+        
+        // 添加子视图
+        [topHeaderView, chatTableView, inputAreaView].forEach {
+            $0.translatesAutoresizingMaskIntoConstraints = false
+            view.addSubview($0)
+        }
+        
+        // 布局约束
+        NSLayoutConstraint.activate([
+            // 顶部标题视图约束
+            topHeaderView.topAnchor.constraint(equalTo: view.topAnchor),
+            topHeaderView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            topHeaderView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            topHeaderView.heightAnchor.constraint(equalToConstant: 100),
+            
+            // 底部输入区域约束
+            inputAreaView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            inputAreaView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            inputAreaView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
+            inputAreaView.heightAnchor.constraint(equalToConstant: 120),
+            
+            // 聊天记录表格约束
+            chatTableView.topAnchor.constraint(equalTo: topHeaderView.bottomAnchor),
+            chatTableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            chatTableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            chatTableView.bottomAnchor.constraint(equalTo: inputAreaView.topAnchor)
+        ])
+    }
+    
+    private func setupDelegates() {
+        inputAreaView.delegate = self
+        chatTableView.chatDelegate = self
     }
     
     // 设置键盘监听
@@ -104,13 +126,13 @@ class ViewController: UIViewController {
         
         UIView.animate(withDuration: duration) {
             // 将输入容器向上移动键盘高度
-            self.inputContainerView.transform = CGAffineTransform(translationX: 0, y: -keyboardHeight)
+            self.inputAreaView.transform = CGAffineTransform(translationX: 0, y: -keyboardHeight)
             self.view.layoutIfNeeded()
         }
         
         // 滚动到最新消息
-        if !chatMessages.isEmpty {
-            let indexPath = IndexPath(row: chatMessages.count - 1, section: 0)
+        if !chatTableView.chatMessages.isEmpty {
+            let indexPath = IndexPath(row: chatTableView.chatMessages.count - 1, section: 0)
             chatTableView.scrollToRow(at: indexPath, at: .bottom, animated: true)
         }
     }
@@ -123,130 +145,17 @@ class ViewController: UIViewController {
         
         UIView.animate(withDuration: duration) {
             // 恢复输入容器的原始位置
-            self.inputContainerView.transform = .identity
+            self.inputAreaView.transform = .identity
             self.view.layoutIfNeeded()
         }
-    }
-    
-    private func setupUI() {
-        view.backgroundColor = .systemBackground
-        
-        // 添加顶部背景视图 - 不需要重新创建，使用类属性
-        topBackgroundView.backgroundColor = UIColor(red: 1.0, green: 0.7, blue: 0.8, alpha: 1.0) // 浅粉色背景
-        topBackgroundView.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(topBackgroundView)
-        
-        // 添加标题标签
-        let titleLabel = UILabel()
-        titleLabel.text = "朵朵专属AI"
-        titleLabel.font = UIFont.systemFont(ofSize: 24, weight: .bold)
-        titleLabel.textAlignment = .center
-        titleLabel.textColor = .white // 白色文字
-        titleLabel.translatesAutoresizingMaskIntoConstraints = false
-        topBackgroundView.addSubview(titleLabel)
-        
-        // 聊天记录表格
-        chatTableView.register(ChatBubbleCell.self, forCellReuseIdentifier: "ChatCell")
-        chatTableView.delegate = self
-        chatTableView.dataSource = self
-        chatTableView.separatorStyle = .none
-        chatTableView.backgroundColor = .systemBackground
-        chatTableView.translatesAutoresizingMaskIntoConstraints = false
-        // 添加表格背景图案
-        let patternImage = UIImage(systemName: "bubble.left.and.bubble.right.fill")?.withTintColor(.systemGray6, renderingMode: .alwaysOriginal)
-        chatTableView.backgroundView = UIImageView(image: patternImage)
-        chatTableView.backgroundView?.contentMode = .scaleAspectFit
-        chatTableView.backgroundView?.alpha = 0.1
-        view.addSubview(chatTableView)
-        
-        // 底部输入区域容器 - 使用类属性
-        inputContainerView.backgroundColor = .white // 修改为白色背景
-        // 添加阴影效果
-        inputContainerView.layer.shadowColor = UIColor.black.cgColor
-        inputContainerView.layer.shadowOffset = CGSize(width: 0, height: -2)
-        inputContainerView.layer.shadowOpacity = 0.1
-        inputContainerView.layer.shadowRadius = 3
-        inputContainerView.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(inputContainerView)
-        
-        // 语音按钮 - 调大并放在上方居中
-        let micConfig = UIImage.SymbolConfiguration(pointSize: 30, weight: .medium)
-        voiceButton.setImage(UIImage(systemName: "mic.fill", withConfiguration: micConfig), for: .normal)
-        voiceButton.tintColor = .white // 白色图标
-        voiceButton.backgroundColor = UIColor(red: 1.0, green: 0.7, blue: 0.8, alpha: 1.0) // 浅粉色背景
-        voiceButton.layer.cornerRadius = 35 // 增大圆角
-        voiceButton.layer.shadowColor = UIColor.black.cgColor
-        voiceButton.layer.shadowOffset = CGSize(width: 0, height: 2)
-        voiceButton.layer.shadowOpacity = 0.3
-        voiceButton.layer.shadowRadius = 4
-        voiceButton.addTarget(self, action: #selector(voiceButtonTapped), for: .touchUpInside)
-        voiceButton.translatesAutoresizingMaskIntoConstraints = false
-        inputContainerView.addSubview(voiceButton)
-        
-        // 文本输入框 - 放在语音按钮下方
-        inputTextField.placeholder = "请输入指令或点击上方麦克风"
-        inputTextField.font = UIFont.systemFont(ofSize: 16)
-        inputTextField.borderStyle = .roundedRect
-        inputTextField.backgroundColor = .white
-        inputTextField.layer.cornerRadius = 18
-        inputTextField.clipsToBounds = true
-        inputTextField.delegate = self
-        inputTextField.translatesAutoresizingMaskIntoConstraints = false
-        inputContainerView.addSubview(inputTextField)
-        
-        // 布局约束
-        NSLayoutConstraint.activate([
-            // 顶部背景视图约束
-            topBackgroundView.topAnchor.constraint(equalTo: view.topAnchor),
-            topBackgroundView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            topBackgroundView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            topBackgroundView.heightAnchor.constraint(equalToConstant: 100),
-            
-            // 标题标签约束
-            titleLabel.centerXAnchor.constraint(equalTo: topBackgroundView.centerXAnchor, constant: 15),
-            titleLabel.bottomAnchor.constraint(equalTo: topBackgroundView.bottomAnchor, constant: -15),
-            
-            // 底部输入区域约束
-            inputContainerView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            inputContainerView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            inputContainerView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
-            inputContainerView.heightAnchor.constraint(equalToConstant: 120), // 增加高度
-            
-            // 语音按钮约束 - 放在上方居中
-            voiceButton.centerXAnchor.constraint(equalTo: inputContainerView.centerXAnchor),
-            voiceButton.topAnchor.constraint(equalTo: inputContainerView.topAnchor, constant: 12),
-            voiceButton.widthAnchor.constraint(equalToConstant: 60), // 增大按钮尺寸
-            voiceButton.heightAnchor.constraint(equalToConstant: 60), // 增大按钮尺寸
-            
-            // 输入框约束 - 放在下方
-            inputTextField.leadingAnchor.constraint(equalTo: inputContainerView.leadingAnchor, constant: 16),
-            inputTextField.trailingAnchor.constraint(equalTo: inputContainerView.trailingAnchor, constant: -16),
-            inputTextField.topAnchor.constraint(equalTo: voiceButton.bottomAnchor, constant: 12),
-            inputTextField.heightAnchor.constraint(equalToConstant: 36),
-            
-            // 聊天记录表格约束
-            chatTableView.topAnchor.constraint(equalTo: topBackgroundView.bottomAnchor),
-            chatTableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            chatTableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            chatTableView.bottomAnchor.constraint(equalTo: inputContainerView.topAnchor)
-        ])
     }
     
     // 语音授权请求
     private func requestSpeechAuthorization() {
         SFSpeechRecognizer.requestAuthorization { authStatus in
             OperationQueue.main.addOperation {
-                self.voiceButton.isEnabled = authStatus == .authorized
+                self.inputAreaView.voiceButton.isEnabled = authStatus == .authorized
             }
-        }
-    }
-    
-    // 语音按钮点击处理
-    @objc private func voiceButtonTapped() {
-        if audioEngine.isRunning {
-            stopRecording()
-        } else {
-            startRecording()
         }
     }
     
@@ -296,7 +205,7 @@ class ViewController: UIViewController {
                 if let result = result {
                     let text = result.bestTranscription.formattedString
                     DispatchQueue.main.async {
-                        self.inputTextField.text = text
+                        self.inputAreaView.inputTextField.text = text
                         
                         // 重置停顿计时器
                         self.resetPauseDetectionTimer()
@@ -327,8 +236,7 @@ class ViewController: UIViewController {
             }
             
             try audioEngine.start()
-            let micConfig = UIImage.SymbolConfiguration(pointSize: 30, weight: .medium)
-            voiceButton.setImage(UIImage(systemName: "mic.slash.fill", withConfiguration: micConfig), for: .normal)
+            inputAreaView.updateVoiceButtonImage(isRecording: true)
         } catch {
             showAlert(message: "录音启动失败：\(error.localizedDescription)")
         }
@@ -351,8 +259,7 @@ class ViewController: UIViewController {
         }
         
         // 重置UI
-        let micConfig = UIImage.SymbolConfiguration(pointSize: 30, weight: .medium)
-        voiceButton.setImage(UIImage(systemName: "mic.fill", withConfiguration: micConfig), for: .normal)
+        inputAreaView.updateVoiceButtonImage(isRecording: false)
         
         // 取消计时器
         pauseDetectionTimer?.invalidate()
@@ -395,12 +302,12 @@ class ViewController: UIViewController {
             do {
                 print("⭐️ 增加星星操作 - 数量: 1")
                 try starService.addStars(1)
-                addOrUpdateAIMessage("已经帮你增加了1颗星星！")
+                chatTableView.addOrUpdateAIMessage("已经帮你增加了1颗星星！")
                 print("✅ 星星增加成功 - 当前总数: \(starService.getStars())")
                 return true
             } catch {
                 print("❌ 增加星星失败: \(error)")
-                addOrUpdateAIMessage("抱歉，增加星星时出现错误")
+                chatTableView.addOrUpdateAIMessage("抱歉，增加星星时出现错误")
                 return true
             }
         }
@@ -410,12 +317,12 @@ class ViewController: UIViewController {
             do {
                 print("⭐️ 减少星星操作 - 数量: 1")
                 try starService.removeStars(1)
-                addOrUpdateAIMessage("已经减少了1颗星星。")
+                chatTableView.addOrUpdateAIMessage("已经减少了1颗星星。")
                 print("✅ 星星减少成功 - 当前总数: \(starService.getStars())")
                 return true
             } catch {
                 print("❌ 减少星星失败: \(error)")
-                addOrUpdateAIMessage("抱歉，减少星星时出现错误")
+                chatTableView.addOrUpdateAIMessage("抱歉，减少星星时出现错误")
                 return true
             }
         }
@@ -453,7 +360,7 @@ class ViewController: UIViewController {
             message += "\n总计：\(totalStars)颗星星 ✨"
             
             print("📈 查询结果 - 今日星星: \(todayStars), 本周总数: \(totalStars)")
-            addOrUpdateAIMessage(message)
+            chatTableView.addOrUpdateAIMessage(message)
             return true
         }
         
@@ -461,11 +368,12 @@ class ViewController: UIViewController {
     }
     
     private func processCommand(_ text: String) {
-        // 清空输入框
-        inputTextField.text = ""
+        // 清空输入框并收起键盘
+        inputAreaView.clearTextField()
+        inputAreaView.dismissKeyboard()
         
         // 添加用户消息到聊天记录
-        addMessage(sender: "user", message: text)
+        chatTableView.addMessage(sender: "user", message: text)
         
         // 先处理星星相关的命令
         if processStarCommand(text) {
@@ -475,7 +383,7 @@ class ViewController: UIViewController {
         // 检查是否需要唤起应用
         if let appLaunchResult = appLaunchService.checkAndLaunchApp(for: text) {
             // 如果成功识别并尝试启动应用
-            addOrUpdateAIMessage(appLaunchResult.responseMessage)
+            chatTableView.addOrUpdateAIMessage(appLaunchResult.responseMessage)
             
             // 如果成功启动应用，不需要继续发送到AI服务
             if appLaunchResult.appLaunched {
@@ -501,7 +409,7 @@ class ViewController: UIViewController {
                 print("📥 收到AI响应片段: \(chunk)")
                 
                 // 添加或更新AI消息
-                self.addOrUpdateAIMessage(chunk)
+                self.chatTableView.addOrUpdateAIMessage(chunk)
                 
                 // 使用文字转语音服务朗读新增内容
                 TextToSpeechService.shared.speakAddition(chunk)
@@ -518,7 +426,7 @@ class ViewController: UIViewController {
                     self.showAlert(message: errorMessage)
                     
                     // 在聊天界面显示错误信息
-                    self.addOrUpdateAIMessage("抱歉，我现在无法回应，请检查AI服务是否正常运行。")
+                    self.chatTableView.addOrUpdateAIMessage("抱歉，我现在无法回应，请检查AI服务是否正常运行。")
                     return
                 }
                 
@@ -529,247 +437,27 @@ class ViewController: UIViewController {
             }
         )
     }
-    
-    // 添加消息到聊天记录并返回索引
-    private func addMessage(sender: String, message: String) -> Int {
-        chatMessages.append((sender: sender, message: message))
-        let indexPath = IndexPath(row: chatMessages.count - 1, section: 0)
-        chatTableView.insertRows(at: [indexPath], with: .automatic)
-        chatTableView.scrollToRow(at: indexPath, at: .bottom, animated: true)
-        return chatMessages.count - 1
-    }
-    
-    // 更新AI消息单元格
-    private func updateAIMessageCell(at index: Int) {
-        let indexPath = IndexPath(row: index, section: 0)
-        
-        // 先更新数据源中的消息
-        let currentMessage = chatMessages[index].message
-    
-        
-        // 更新表格视图
-        chatTableView.beginUpdates()
-        
-        if let cell = chatTableView.cellForRow(at: indexPath) as? ChatBubbleCell {
-            cell.messageLabel.text = currentMessage
-            // 强制布局更新
-            cell.setNeedsLayout()
-            cell.layoutIfNeeded()
-        }
-        
-        chatTableView.endUpdates()
-        
-        // 确保滚动到最新消息
-        chatTableView.scrollToRow(at: indexPath, at: .bottom, animated: false)
-    }
-    
-    // 添加或更新AI消息
-    private func addOrUpdateAIMessage(_ chunk: String) {
-        DispatchQueue.main.async {
-            // 检查是否已经有AI消息
-            if let lastMessageIndex = self.chatMessages.indices.last,
-               self.chatMessages[lastMessageIndex].sender == "ai" {
-                // 更新现有AI消息
-                self.chatMessages[lastMessageIndex].message += chunk
-                self.updateAIMessageCell(at: lastMessageIndex)
-            } else {
-                // 添加新的AI消息
-                let index = self.addMessage(sender: "ai", message: chunk)
-                // 确保滚动到最新消息
-                let indexPath = IndexPath(row: index, section: 0)
-                self.chatTableView.scrollToRow(at: indexPath, at: .bottom, animated: true)
-            }
-        }
-    }
 }
 
-// 聊天气泡单元格
-class ChatBubbleCell: UITableViewCell {
-    let bubbleView = UIView()
-    let messageLabel = UILabel()
-    let avatarImageView = UIImageView()
-    
-    var isUserMessage: Bool = false {
-        didSet {
-            setupBubbleStyle()
-        }
-    }
-    
-    override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
-        super.init(style: style, reuseIdentifier: reuseIdentifier)
-        setupViews()
-    }
-    
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-    
-    private func setupViews() {
-        selectionStyle = .none
-        backgroundColor = .clear
-        contentView.backgroundColor = .clear
-        
-        // 头像图片视图
-        avatarImageView.contentMode = .scaleAspectFill
-        avatarImageView.clipsToBounds = true
-        avatarImageView.translatesAutoresizingMaskIntoConstraints = false
-        contentView.addSubview(avatarImageView)
-        
-        // 气泡视图
-        bubbleView.layer.cornerRadius = 18
-        bubbleView.clipsToBounds = true
-        bubbleView.translatesAutoresizingMaskIntoConstraints = false
-        contentView.addSubview(bubbleView)
-        
-        // 消息标签 - 确保在最上层
-        messageLabel.numberOfLines = 0
-        messageLabel.font = UIFont.systemFont(ofSize: 16)
-        messageLabel.backgroundColor = .clear // 确保背景透明
-        messageLabel.translatesAutoresizingMaskIntoConstraints = false
-        contentView.addSubview(messageLabel) // 直接添加到contentView而不是bubbleView
-        
-        // 布局约束
-        NSLayoutConstraint.activate([
-            // 消息标签约束 - 相对于气泡视图定位
-            messageLabel.topAnchor.constraint(equalTo: bubbleView.topAnchor, constant: 10),
-            messageLabel.bottomAnchor.constraint(equalTo: bubbleView.bottomAnchor, constant: -10),
-            messageLabel.leadingAnchor.constraint(equalTo: bubbleView.leadingAnchor, constant: 14),
-            messageLabel.trailingAnchor.constraint(equalTo: bubbleView.trailingAnchor, constant: -14),
-            
-            bubbleView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 6),
-            bubbleView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -6),
-            bubbleView.widthAnchor.constraint(lessThanOrEqualTo: contentView.widthAnchor, multiplier: 0.7),
-            
-            avatarImageView.widthAnchor.constraint(equalToConstant: 36),
-            avatarImageView.heightAnchor.constraint(equalToConstant: 36),
-            avatarImageView.centerYAnchor.constraint(equalTo: bubbleView.centerYAnchor)
-        ])
-    }
-    
-    private func setupBubbleStyle() {
-        if isUserMessage {
-            // 用户消息样式 - 使用浅粉色背景
-            bubbleView.backgroundColor = UIColor(red: 1.0, green: 0.7, blue: 0.8, alpha: 1.0) // 浅粉色背景
-            
-            // 确保文字颜色对比度高
-            messageLabel.textColor = .white
-            
-            // 用户头像 - 使用自定义图片
-            avatarImageView.image = UIImage(named: "UserAvatar")
-            
-            // 确保头像是圆形 - 在layoutSubviews中设置圆角
-            avatarImageView.layer.cornerRadius = 18 // 直径的一半
-            avatarImageView.clipsToBounds = true
-            
-            // 添加边框使圆形更明显（可选）
-            avatarImageView.layer.borderWidth = 1.0
-            avatarImageView.layer.borderColor = UIColor.white.cgColor
-            
-            // 约束调整 - 用户消息：头像在右边，气泡在左边
-            NSLayoutConstraint.deactivate(bubbleView.constraints.filter { 
-                $0.firstAttribute == .leading || $0.firstAttribute == .trailing 
-            })
-            NSLayoutConstraint.deactivate(avatarImageView.constraints.filter { 
-                $0.firstAttribute == .leading || $0.firstAttribute == .trailing 
-            })
-            NSLayoutConstraint.activate([
-                // 头像在右边
-                avatarImageView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
-                // 气泡在头像左边
-                bubbleView.trailingAnchor.constraint(equalTo: avatarImageView.leadingAnchor, constant: -8),
-                bubbleView.leadingAnchor.constraint(greaterThanOrEqualTo: contentView.leadingAnchor, constant: 16)
-            ])
+// MARK: - InputAreaViewDelegate
+extension ViewController: InputAreaViewDelegate {
+    func voiceButtonTapped() {
+        if audioEngine.isRunning {
+            stopRecording()
         } else {
-            // AI消息样式 - 左侧浅色气泡
-            bubbleView.backgroundColor = UIColor(red: 0.95, green: 0.95, blue: 0.95, alpha: 1.0)
-            
-            // AI消息文字颜色
-            messageLabel.textColor = .black
-            
-            // AI头像 - 使用可爱的星星图标
-            avatarImageView.image = UIImage(systemName: "star.fill")
-            avatarImageView.tintColor = UIColor(red: 1.0, green: 0.7, blue: 0.8, alpha: 1.0) // 浅粉色图标
-            
-            // 确保AI头像也是圆形
-            avatarImageView.layer.cornerRadius = 18
-            avatarImageView.clipsToBounds = true
-            
-            // 添加背景色使圆形更明显（可选）
-            avatarImageView.backgroundColor = UIColor(red: 0.98, green: 0.95, blue: 0.9, alpha: 1.0) // 浅橘色背景
-            
-            // 约束调整 - AI消息：头像在左边，气泡在右边
-            NSLayoutConstraint.deactivate(bubbleView.constraints.filter { 
-                $0.firstAttribute == .leading || $0.firstAttribute == .trailing 
-            })
-            NSLayoutConstraint.deactivate(avatarImageView.constraints.filter { 
-                $0.firstAttribute == .leading || $0.firstAttribute == .trailing 
-            })
-            NSLayoutConstraint.activate([
-                // 头像在左边
-                avatarImageView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
-                // 气泡在头像右边
-                bubbleView.leadingAnchor.constraint(equalTo: avatarImageView.trailingAnchor, constant: 8),
-                bubbleView.trailingAnchor.constraint(lessThanOrEqualTo: contentView.trailingAnchor, constant: -16)
-            ])
+            startRecording()
         }
-        
-        // 强制更新布局
-        setNeedsLayout()
-        layoutIfNeeded()
     }
     
-    // 添加layoutSubviews方法确保圆角正确应用
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        
-        // 确保头像是圆形 - 在实际布局后设置圆角
-        avatarImageView.layer.cornerRadius = avatarImageView.frame.width / 2
-    }
-    
-    func configure(with message: String, isUser: Bool) {
-        // 打印调试信息
-        print("配置单元格: \(message), 用户消息: \(isUser)")
-        
-        messageLabel.text = message
-        isUserMessage = isUser
-    }
-    
-    override func prepareForReuse() {
-        super.prepareForReuse()
-        messageLabel.text = ""
+    func textFieldShouldReturn(_ text: String) -> Bool {
+        processCommand(text)
+        return true
     }
 }
 
-// 表格视图代理和数据源
-extension ViewController: UITableViewDelegate, UITableViewDataSource {
-    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return chatMessages.count
-    }
-    
-    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(withIdentifier: "ChatCell", for: indexPath) as! ChatBubbleCell
-        let message = chatMessages[indexPath.row]
-        cell.configure(with: message.message, isUser: message.sender == "user")
-        return cell
-    }
-    
-    func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
-        return UITableView.automaticDimension
-    }
-    
-    func tableView(_ tableView: UITableView, estimatedHeightForRowAt indexPath: IndexPath) -> CGFloat {
-        return 60
-    }
-}
-
-// 文本输入处理
-extension ViewController: UITextFieldDelegate {
-    func textFieldShouldReturn(_ textField: UITextField) -> Bool {
-        if let text = textField.text, !text.isEmpty {
-            processCommand(text)
-            textField.resignFirstResponder()
-            return true
-        }
-        return false
+// MARK: - ChatTableViewDelegate
+extension ViewController: ChatTableViewDelegate {
+    func chatTableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        // 可以在这里添加点击聊天气泡的处理逻辑
     }
 }
