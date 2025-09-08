@@ -21,6 +21,9 @@ class ViewController: UIViewController {
     // 添加顶部背景视图作为属性
     let topBackgroundView = UIView()
     
+    // 添加底部输入区域容器作为属性
+    let inputContainerView = UIView()
+    
     // 语音识别相关
     private let audioEngine = AVAudioEngine()
     private let speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "zh_CN"))!
@@ -50,6 +53,7 @@ class ViewController: UIViewController {
         super.viewDidLoad()
         setupUI()
         requestSpeechAuthorization()
+        setupKeyboardObservers()
         
         // 配置文字转语音服务
         TextToSpeechService.shared.configure(
@@ -66,6 +70,62 @@ class ViewController: UIViewController {
         topBackgroundView.backgroundColor = UIColor(red: 1.0, green: 0.7, blue: 0.8, alpha: 1.0) // 浅粉色背景
         topBackgroundView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(topBackgroundView)
+    }
+    
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+    
+    // 设置键盘监听
+    private func setupKeyboardObservers() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(keyboardWillShow),
+            name: UIResponder.keyboardWillShowNotification,
+            object: nil
+        )
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(keyboardWillHide),
+            name: UIResponder.keyboardWillHideNotification,
+            object: nil
+        )
+    }
+    
+    // 键盘将要显示
+    @objc private func keyboardWillShow(_ notification: Notification) {
+        guard let keyboardFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect,
+              let duration = notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double else {
+            return
+        }
+        
+        let keyboardHeight = keyboardFrame.height
+        
+        UIView.animate(withDuration: duration) {
+            // 将输入容器向上移动键盘高度
+            self.inputContainerView.transform = CGAffineTransform(translationX: 0, y: -keyboardHeight)
+            self.view.layoutIfNeeded()
+        }
+        
+        // 滚动到最新消息
+        if !chatMessages.isEmpty {
+            let indexPath = IndexPath(row: chatMessages.count - 1, section: 0)
+            chatTableView.scrollToRow(at: indexPath, at: .bottom, animated: true)
+        }
+    }
+    
+    // 键盘将要隐藏
+    @objc private func keyboardWillHide(_ notification: Notification) {
+        guard let duration = notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double else {
+            return
+        }
+        
+        UIView.animate(withDuration: duration) {
+            // 恢复输入容器的原始位置
+            self.inputContainerView.transform = .identity
+            self.view.layoutIfNeeded()
+        }
     }
     
     private func setupUI() {
@@ -85,13 +145,6 @@ class ViewController: UIViewController {
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         topBackgroundView.addSubview(titleLabel)
         
-        // 添加小图标
-        let logoImageView = UIImageView(image: UIImage(systemName: "brain.head.profile"))
-        logoImageView.tintColor = .white
-        logoImageView.contentMode = .scaleAspectFit
-        logoImageView.translatesAutoresizingMaskIntoConstraints = false
-        topBackgroundView.addSubview(logoImageView)
-        
         // 聊天记录表格
         chatTableView.register(ChatBubbleCell.self, forCellReuseIdentifier: "ChatCell")
         chatTableView.delegate = self
@@ -106,8 +159,7 @@ class ViewController: UIViewController {
         chatTableView.backgroundView?.alpha = 0.1
         view.addSubview(chatTableView)
         
-        // 底部输入区域容器
-        let inputContainerView = UIView()
+        // 底部输入区域容器 - 使用类属性
         inputContainerView.backgroundColor = .white // 修改为白色背景
         // 添加阴影效果
         inputContainerView.layer.shadowColor = UIColor.black.cgColor
@@ -153,12 +205,6 @@ class ViewController: UIViewController {
             // 标题标签约束
             titleLabel.centerXAnchor.constraint(equalTo: topBackgroundView.centerXAnchor, constant: 15),
             titleLabel.bottomAnchor.constraint(equalTo: topBackgroundView.bottomAnchor, constant: -15),
-            
-            // 图标约束
-            logoImageView.trailingAnchor.constraint(equalTo: titleLabel.leadingAnchor, constant: -10),
-            logoImageView.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor),
-            logoImageView.widthAnchor.constraint(equalToConstant: 30),
-            logoImageView.heightAnchor.constraint(equalToConstant: 30),
             
             // 底部输入区域约束
             inputContainerView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
@@ -619,14 +665,19 @@ class ChatBubbleCell: UITableViewCell {
             avatarImageView.layer.borderWidth = 1.0
             avatarImageView.layer.borderColor = UIColor.white.cgColor
             
-            // 约束调整
+            // 约束调整 - 用户消息：头像在右边，气泡在左边
             NSLayoutConstraint.deactivate(bubbleView.constraints.filter { 
                 $0.firstAttribute == .leading || $0.firstAttribute == .trailing 
             })
+            NSLayoutConstraint.deactivate(avatarImageView.constraints.filter { 
+                $0.firstAttribute == .leading || $0.firstAttribute == .trailing 
+            })
             NSLayoutConstraint.activate([
-                bubbleView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
-                avatarImageView.trailingAnchor.constraint(equalTo: bubbleView.leadingAnchor, constant: -8),
-                avatarImageView.leadingAnchor.constraint(greaterThanOrEqualTo: contentView.leadingAnchor, constant: 16)
+                // 头像在右边
+                avatarImageView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+                // 气泡在头像左边
+                bubbleView.trailingAnchor.constraint(equalTo: avatarImageView.leadingAnchor, constant: -8),
+                bubbleView.leadingAnchor.constraint(greaterThanOrEqualTo: contentView.leadingAnchor, constant: 16)
             ])
         } else {
             // AI消息样式 - 左侧浅色气泡
@@ -635,8 +686,8 @@ class ChatBubbleCell: UITableViewCell {
             // AI消息文字颜色
             messageLabel.textColor = .black
             
-            // AI头像
-            avatarImageView.image = UIImage(systemName: "brain.head.profile")
+            // AI头像 - 使用可爱的星星图标
+            avatarImageView.image = UIImage(systemName: "star.fill")
             avatarImageView.tintColor = UIColor(red: 1.0, green: 0.7, blue: 0.8, alpha: 1.0) // 浅粉色图标
             
             // 确保AI头像也是圆形
@@ -646,14 +697,19 @@ class ChatBubbleCell: UITableViewCell {
             // 添加背景色使圆形更明显（可选）
             avatarImageView.backgroundColor = UIColor(red: 0.98, green: 0.95, blue: 0.9, alpha: 1.0) // 浅橘色背景
             
-            // 约束调整
+            // 约束调整 - AI消息：头像在左边，气泡在右边
             NSLayoutConstraint.deactivate(bubbleView.constraints.filter { 
                 $0.firstAttribute == .leading || $0.firstAttribute == .trailing 
             })
+            NSLayoutConstraint.deactivate(avatarImageView.constraints.filter { 
+                $0.firstAttribute == .leading || $0.firstAttribute == .trailing 
+            })
             NSLayoutConstraint.activate([
-                bubbleView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
-                avatarImageView.leadingAnchor.constraint(equalTo: bubbleView.trailingAnchor, constant: 8),
-                avatarImageView.trailingAnchor.constraint(lessThanOrEqualTo: contentView.trailingAnchor, constant: -16)
+                // 头像在左边
+                avatarImageView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
+                // 气泡在头像右边
+                bubbleView.leadingAnchor.constraint(equalTo: avatarImageView.trailingAnchor, constant: 8),
+                bubbleView.trailingAnchor.constraint(lessThanOrEqualTo: contentView.trailingAnchor, constant: -16)
             ])
         }
         

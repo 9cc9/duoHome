@@ -69,7 +69,7 @@ class AIService {
         
         // 创建请求体
         let requestBody: [String: Any] = [
-            "model": "qwen-max", // 使用阿里云的模型
+            "model": "qwen3-max-preview", // 使用阿里云的模型
             "messages": messages,
             "temperature": 0.7,
             "max_tokens": 800,
