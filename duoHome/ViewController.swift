@@ -447,7 +447,7 @@ class ViewController: UIViewController {
         
         // 发送到AI服务并获取回复
         print("🚀 开始发送消息到本地AI服务...")
-        localAI.sendMessageStream(
+        aiService.sendMessageStream(
             prompt: text,
             onReceive: { [weak self] chunk in
                 guard let self = self else { return }
