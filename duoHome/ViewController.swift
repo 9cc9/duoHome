@@ -38,6 +38,9 @@ class ViewController: UIViewController {
     
     // 添加星星管理服务
     private let starService = StarManagementService.shared
+    
+    // 添加会话管理服务
+    private let conversationService = ConversationService.shared
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -375,6 +378,9 @@ class ViewController: UIViewController {
         // 添加用户消息到聊天记录
         chatTableView.addMessage(sender: "user", message: text)
         
+        // 上传用户消息到云服务器
+        uploadUserMessage(text)
+        
         // 先处理星星相关的命令
         if processStarCommand(text) {
             return
@@ -411,6 +417,9 @@ class ViewController: UIViewController {
                 // 添加或更新AI消息
                 self.chatTableView.addOrUpdateAIMessage(chunk)
                 
+                // 上传AI消息到云服务器（只上传完整响应）
+                // 这里暂时不处理，等完整响应后再上传
+                
                 // 使用文字转语音服务朗读新增内容
                 TextToSpeechService.shared.speakAddition(chunk)
             },
@@ -433,9 +442,50 @@ class ViewController: UIViewController {
                 print("✅ AI响应完成")
                 if let response = fullResponse {
                     print("📝 完整响应内容: \(response)")
+                    
+                    // 上传完整的AI响应到云服务器
+                    self.uploadAIMessage(response)
                 }
             }
         )
+    }
+    
+    // MARK: - 会话上传方法
+    private func uploadUserMessage(_ message: String) {
+        // 检查是否已有会话，如果没有则创建新会话
+        if conversationService.getCurrentConversationId() == nil {
+            // 创建新会话，使用消息的前20个字符作为标题
+            let title = String(message.prefix(20))
+            conversationService.createConversation(title: title, firstMessage: message) { [weak self] result in
+                switch result {
+                case .success(let conversationId):
+                    print("✅ [ViewController] 新会话创建成功，ID: \(conversationId)")
+                case .failure(let error):
+                    print("❌ [ViewController] 创建会话失败: \(error.localizedDescription)")
+                }
+            }
+        } else {
+            // 已有会话，直接添加用户消息
+            conversationService.addUserMessage(message) { [weak self] result in
+                switch result {
+                case .success:
+                    print("✅ [ViewController] 用户消息上传成功")
+                case .failure(let error):
+                    print("❌ [ViewController] 用户消息上传失败: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+    
+    private func uploadAIMessage(_ message: String) {
+        conversationService.addAIMessage(message) { [weak self] result in
+            switch result {
+            case .success:
+                print("✅ [ViewController] AI消息上传成功")
+            case .failure(let error):
+                print("❌ [ViewController] AI消息上传失败: \(error.localizedDescription)")
+            }
+        }
     }
 }
 
