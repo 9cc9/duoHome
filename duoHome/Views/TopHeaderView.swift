@@ -7,9 +7,16 @@
 
 import UIKit
 
+protocol TopHeaderViewDelegate: AnyObject {
+    func historyButtonTapped()
+}
+
 class TopHeaderView: UIView {
+    weak var delegate: TopHeaderViewDelegate?
+    
     private let backgroundView = UIView()
     private let titleLabel = UILabel()
+    private let historyButton = UIButton(type: .system)
     
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -35,6 +42,16 @@ class TopHeaderView: UIView {
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         backgroundView.addSubview(titleLabel)
         
+        // 历史记录按钮
+        historyButton.setTitle("☰", for: .normal)
+        historyButton.titleLabel?.font = UIFont.systemFont(ofSize: 20, weight: .medium)
+        historyButton.setTitleColor(.white, for: .normal)
+        historyButton.backgroundColor = UIColor.white.withAlphaComponent(0.2)
+        historyButton.layer.cornerRadius = 20
+        historyButton.addTarget(self, action: #selector(historyButtonTapped), for: .touchUpInside)
+        historyButton.translatesAutoresizingMaskIntoConstraints = false
+        backgroundView.addSubview(historyButton)
+        
         // 布局约束
         NSLayoutConstraint.activate([
             // 背景视图约束
@@ -45,7 +62,17 @@ class TopHeaderView: UIView {
             
             // 标题标签约束
             titleLabel.centerXAnchor.constraint(equalTo: backgroundView.centerXAnchor),
-            titleLabel.bottomAnchor.constraint(equalTo: backgroundView.bottomAnchor, constant: -15)
+            titleLabel.bottomAnchor.constraint(equalTo: backgroundView.bottomAnchor, constant: -15),
+            
+            // 历史记录按钮约束
+            historyButton.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor),
+            historyButton.leadingAnchor.constraint(equalTo: backgroundView.leadingAnchor, constant: 20),
+            historyButton.widthAnchor.constraint(equalToConstant: 40),
+            historyButton.heightAnchor.constraint(equalToConstant: 40)
         ])
+    }
+    
+    @objc private func historyButtonTapped() {
+        delegate?.historyButtonTapped()
     }
 }

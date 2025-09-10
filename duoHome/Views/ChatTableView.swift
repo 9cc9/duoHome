@@ -96,6 +96,11 @@ class ChatTableView: UITableView {
             }
         }
     }
+    
+    func clearMessages() {
+        chatMessages.removeAll()
+        reloadData()
+    }
 }
 
 // MARK: - UITableViewDataSource

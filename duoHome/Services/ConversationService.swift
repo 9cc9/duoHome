@@ -54,6 +54,24 @@ struct ChatData: Codable {
     let gmtModified: String?
 }
 
+// MARK: - 历史记录相关数据模型
+struct ConversationListResponse: Codable {
+    let success: Bool
+    let resultCode: String
+    let data: String?
+    let values: [ConversationItem]
+}
+
+struct ConversationItem: Codable {
+    let id: Int
+    let title: String
+    let llmModel: String
+    let ext: [String: String]
+    let chatList: [String]
+    let gmtCreate: String
+    let gmtModified: String
+}
+
 // MARK: - 错误类型
 enum ConversationError: Error, LocalizedError {
     case invalidURL
@@ -233,5 +251,45 @@ class ConversationService {
     // MARK: - 便捷方法：添加AI消息
     func addAIMessage(_ content: String, completion: @escaping (Result<Void, Error>) -> Void = { _ in }) {
         addChatMessage(content: content, role: "assistant", completion: completion)
+    }
+    
+    // MARK: - 获取历史记录列表
+    func fetchConversationList(completion: @escaping (Result<[ConversationItem], Error>) -> Void) {
+        guard let url = URL(string: "\(baseURL)/conversations/list.json") else {
+            completion(.failure(ConversationError.invalidURL))
+            return
+        }
+        
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = "GET"
+        urlRequest.setValue("*/*", forHTTPHeaderField: "accept")
+        urlRequest.setValue("zh-CN,zh;q=0.9,en;q=0.8,zh-TW;q=0.7", forHTTPHeaderField: "accept-language")
+        
+        URLSession.shared.dataTask(with: urlRequest) { data, response, error in
+            if let error = error {
+                completion(.failure(ConversationError.networkError(error)))
+                return
+            }
+            
+            guard let data = data else {
+                completion(.failure(ConversationError.noData))
+                return
+            }
+            
+            do {
+                let response = try JSONDecoder().decode(ConversationListResponse.self, from: data)
+                print("✅ [ConversationService] 获取历史记录成功: \(response.values.count)条记录")
+                
+                if response.success && response.resultCode == "SUCCESS" {
+                    completion(.success(response.values))
+                } else {
+                    print("❌ [ConversationService] 服务器返回错误: \(response.resultCode)")
+                    completion(.failure(ConversationError.invalidResponse))
+                }
+            } catch {
+                print("❌ [ConversationService] 解析历史记录失败: \(error)")
+                completion(.failure(ConversationError.decodingError(error)))
+            }
+        }.resume()
     }
 }

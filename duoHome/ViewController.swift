@@ -41,6 +41,9 @@ class ViewController: UIViewController {
     
     // 添加会话管理服务
     private let conversationService = ConversationService.shared
+    
+    // 添加历史记录侧边栏
+    private let historySidebarView = HistorySidebarView()
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -69,10 +72,13 @@ class ViewController: UIViewController {
         view.backgroundColor = .systemBackground
         
         // 添加子视图
-        [topHeaderView, chatTableView, inputAreaView].forEach {
+        [topHeaderView, chatTableView, inputAreaView, historySidebarView].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
             view.addSubview($0)
         }
+        
+        // 设置侧边栏初始状态
+        historySidebarView.isHidden = true
         
         // 布局约束
         NSLayoutConstraint.activate([
@@ -92,13 +98,21 @@ class ViewController: UIViewController {
             chatTableView.topAnchor.constraint(equalTo: topHeaderView.bottomAnchor),
             chatTableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             chatTableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            chatTableView.bottomAnchor.constraint(equalTo: inputAreaView.topAnchor)
+            chatTableView.bottomAnchor.constraint(equalTo: inputAreaView.topAnchor),
+            
+            // 历史记录侧边栏约束
+            historySidebarView.topAnchor.constraint(equalTo: view.topAnchor),
+            historySidebarView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            historySidebarView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            historySidebarView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
     }
     
     private func setupDelegates() {
         inputAreaView.delegate = self
         chatTableView.chatDelegate = self
+        topHeaderView.delegate = self
+        historySidebarView.delegate = self
     }
     
     // 设置键盘监听
@@ -487,6 +501,23 @@ class ViewController: UIViewController {
             }
         }
     }
+    
+    // MARK: - 历史记录相关方法
+    private func showHistorySidebar() {
+        // 获取历史记录数据
+        conversationService.fetchConversationList { [weak self] result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let conversations):
+                    self?.historySidebarView.updateConversations(conversations)
+                    self?.historySidebarView.showSidebar()
+                case .failure(let error):
+                    print("❌ [ViewController] 获取历史记录失败: \(error.localizedDescription)")
+                    self?.showAlert(message: "获取历史记录失败，请稍后重试")
+                }
+            }
+        }
+    }
 }
 
 // MARK: - InputAreaViewDelegate
@@ -509,5 +540,35 @@ extension ViewController: InputAreaViewDelegate {
 extension ViewController: ChatTableViewDelegate {
     func chatTableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         // 可以在这里添加点击聊天气泡的处理逻辑
+    }
+}
+
+// MARK: - TopHeaderViewDelegate
+extension ViewController: TopHeaderViewDelegate {
+    func historyButtonTapped() {
+        showHistorySidebar()
+    }
+}
+
+// MARK: - HistorySidebarViewDelegate
+extension ViewController: HistorySidebarViewDelegate {
+    func historySidebarDidSelectConversation(_ conversation: ConversationItem) {
+        // 切换到选中的对话
+        print("📝 [ViewController] 切换到对话: \(conversation.title) (ID: \(conversation.id))")
+        
+        // 清空当前聊天记录
+        chatTableView.clearMessages()
+        
+        // 设置当前会话ID
+        conversationService.resetConversation()
+        
+        // 这里可以添加加载特定对话历史记录的逻辑
+        // 目前先显示一个提示消息
+        chatTableView.addOrUpdateAIMessage("已切换到对话：\(conversation.title)")
+    }
+    
+    func historySidebarDidClose() {
+        // 侧边栏关闭时的处理
+        print("📝 [ViewController] 历史记录侧边栏已关闭")
     }
 }
